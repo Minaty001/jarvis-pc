@@ -1,0 +1,5 @@
+"""Jarvis PC Configuration."""
+
+from config.settings import settings
+
+__all__ = ["settings"]
