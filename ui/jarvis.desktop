@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=JARVIS
+GenericName=Personal AI Assistant
+Comment=JARVIS — AI assistant for Linux Mint (native GTK UI with floating orb)
+Exec=jarvis-ui
+Icon=jarvis
+Terminal=false
+Categories=Utility;GTK;
+Keywords=AI;Assistant;Voice;Jarvis;
+StartupNotify=true

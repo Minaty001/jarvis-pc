@@ -38,6 +38,7 @@ class VoicePipeline:
         self._tts_playing: bool = False
         self._tts_lock: threading.Lock = threading.Lock()
         self._command_speech_chunks: int = 0
+        self._post_tts_until: float = 0.0
 
     def _start_tts_loop(self) -> None:
         """Start a dedicated event loop for TTS in a background thread."""
@@ -86,11 +87,13 @@ class VoicePipeline:
 
             now = time.time()
 
-            # Skip audio while TTS is playing to prevent feedback
+            # Mute mic and skip audio while TTS is playing or in post-TTS grace period
             with self._tts_lock:
                 tts_active = self._tts_playing
-            if tts_active:
+            if tts_active or now < self._post_tts_until:
                 self._wake_audio_buffer.clear()
+                self._command_audio_buffer.clear()
+                self._listening_for_command = False
                 continue
 
             if not self._listening_for_command:
@@ -109,7 +112,6 @@ class VoicePipeline:
 
                     if is_wake:
                         logger.info("Wake word detected! (score=%.3f)", score)
-                        self._last_wake_time = now
                         self._listening_for_command = True
                         self._command_audio_buffer = []
                         self._command_speech_chunks = 0
@@ -122,10 +124,6 @@ class VoicePipeline:
                 if vad.is_speech(chunk):
                     silence_chunks = 0
                     self._command_speech_chunks += 1
-
-                    # Say "Yes?" only after actual speech is detected
-                    if self._command_speech_chunks == 3:
-                        self._speak_async("Yes?")
                 else:
                     silence_chunks += 1
                     wake_silence_chunks += 1
@@ -135,6 +133,8 @@ class VoicePipeline:
                     self._process_command()
                     self._listening_for_command = False
                     self._command_audio_buffer.clear()
+                    self._last_wake_time = time.time()
+                    self._post_tts_until = time.time() + 1.0
                     silence_chunks = 0
                     self._command_speech_chunks = 0
 
@@ -143,6 +143,7 @@ class VoicePipeline:
                     logger.info("No speech after wake word, going back to listening")
                     self._listening_for_command = False
                     self._command_audio_buffer.clear()
+                    self._last_wake_time = time.time()
                     silence_chunks = 0
                     wake_silence_chunks = 0
 
@@ -169,6 +170,7 @@ class VoicePipeline:
         finally:
             with self._tts_lock:
                 self._tts_playing = False
+                self._post_tts_until = time.time() + 1.0
 
     def _process_command(self) -> None:
         """Process the collected command audio."""
@@ -183,6 +185,17 @@ class VoicePipeline:
         text = whisper_stt.transcribe(audio)
         if not text:
             logger.info("No speech detected in command")
+            return
+
+        # Filter known Whisper silence / noise hallucinations
+        hallucinations = {
+            "thank you.", "thank you", "subtitles by", "subtitles", "you",
+            "bye", "bye.", "thank you for watching", "thanks for watching",
+            "subscribe", "chuckles", "sighs", "laughter"
+        }
+        clean_text = text.strip().lower()
+        if not clean_text or clean_text in hallucinations or len(clean_text) < 2:
+            logger.info("Ignored empty or hallucinated speech: '%s'", text)
             return
 
         logger.info("Command: '%s'", text)

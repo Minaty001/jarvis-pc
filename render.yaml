@@ -1,0 +1,32 @@
+# Render.com Infrastructure Blueprint for JARVIS Backend API Server
+# See https://render.com/docs/blueprint-spec for details
+
+services:
+  - type: web
+    name: jarvis-backend-api
+    env: python
+    region: singapore # Options: oregon, frankfurt, singapore, ohio
+    plan: starter      # Options: free, starter, standard, pro
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "python render_app.py"
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: HOST
+        value: 0.0.0.0
+      - key: GROQ_API_KEY
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: ZEN_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: JARVIS_DATA_DIR
+        value: /var/data
+    disk:
+      name: jarvis-sqlite-data
+      mountPath: /var/data
+      sizeGB: 1

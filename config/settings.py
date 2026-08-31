@@ -10,9 +10,10 @@ from pydantic_settings import BaseSettings
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = PROJECT_ROOT / "assets"
 WAKEWORD_DIR = ASSETS_DIR / "wakeword"
-DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = Path(os.environ.get("JARVIS_DATA_DIR", PROJECT_ROOT / "data")).expanduser()
+CONFIG_FILE = Path(os.environ.get("JARVIS_CONFIG_FILE", PROJECT_ROOT / ".env")).expanduser()
 
-DATA_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class Settings(BaseSettings):
@@ -41,7 +42,7 @@ class Settings(BaseSettings):
     jarvis_voice: str = Field(default="en-US-GuyNeural", alias="JARVIS_VOICE")
     jarvis_rate: str = "+0%"
     jarvis_volume: str = "+0%"
-    wake_threshold: float = Field(default=0.5, alias="JARVIS_WAKE_THRESHOLD")
+    wake_threshold: float = Field(default=0.8, alias="JARVIS_WAKE_THRESHOLD")
     sample_rate: int = 16000
     vad_threshold: float = 0.5
 
@@ -64,7 +65,7 @@ class Settings(BaseSettings):
     data_dir: Path = DATA_DIR
 
     model_config = {
-        "env_file": str(PROJECT_ROOT / ".env"),
+        "env_file": str(CONFIG_FILE),
         "env_file_encoding": "utf-8",
         "extra": "ignore",
         "case_sensitive": False,

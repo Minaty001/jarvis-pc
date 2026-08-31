@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# jarvis-ui — launch the native JARVIS GTK desktop app.
+# Resolves the project dir, activates the venv, and runs run.py (UI mode).
+set -euo pipefail
+
+# Resolve script dir → project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Allow override via JARVIS_HOME (installed location)
+if [[ -n "${JARVIS_HOME:-}" && -d "$JARVIS_HOME" ]]; then
+  PROJECT_ROOT="$JARVIS_HOME"
+fi
+
+cd "$PROJECT_ROOT"
+
+# Activate venv if present
+if [[ -x "$PROJECT_ROOT/.venv/bin/activate" ]]; then
+  # shellcheck disable=SC1091
+  source "$PROJECT_ROOT/.venv/bin/activate"
+fi
+
+export PYTHONPATH="$PROJECT_ROOT:${PYTHONPATH:-}"
+
+# Ensure system GTK is visible to the venv (added during setup)
+exec "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/run.py" "$@"

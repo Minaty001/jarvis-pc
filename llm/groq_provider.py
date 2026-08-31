@@ -14,6 +14,7 @@ try:
     from groq import AsyncGroq
     HAS_GROQ = True
 except ImportError:
+    AsyncGroq = None  # type: ignore
     HAS_GROQ = False
 
 

@@ -480,18 +480,22 @@ class JarvisAPIHandler(BaseHTTPRequestHandler):
 class JarvisAPI:
     """HTTP API server for the cognitive engine with Web UI."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 3000):
-        self.host = host
-        self.port = port
+    def __init__(self, host: Optional[str] = None, port: Optional[int] = None):
+        import os
+        self.host = host or os.environ.get("HOST", "0.0.0.0")
+        self.port = port or int(os.environ.get("PORT", "3000"))
         self._server: Optional[HTTPServer] = None
         self._thread: Optional[Thread] = None
 
-    def start(self, engine: Any) -> None:
+    def start(self, engine: Any, blocking: bool = False) -> None:
         JarvisAPIHandler.engine = engine
         self._server = HTTPServer((self.host, self.port), JarvisAPIHandler)
-        self._thread = Thread(target=self._server.serve_forever, daemon=True)
-        self._thread.start()
-        logger.info("API server started on http://%s:%d", self.host, self.port)
+        logger.info("API server listening on http://%s:%d", self.host, self.port)
+        if blocking:
+            self._server.serve_forever()
+        else:
+            self._thread = Thread(target=self._server.serve_forever, daemon=True)
+            self._thread.start()
 
     def stop(self) -> None:
         if self._server:
