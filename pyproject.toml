@@ -48,4 +48,4 @@ dev = [
 jarvis = "run:main"
 
 [tool.setuptools.packages.find]
-include = ["agents*", "api*", "cognitive*", "config*", "core*", "execution*", "llm*", "memory*", "perception*", "planning*", "proactive*", "skills*", "task_engine*", "tools*", "ui*", "voice*"]
+include = ["api*", "cognitive*", "config*", "core*", "execution*", "llm*", "memory*", "perception*", "planning*", "proactive*", "task_engine*", "tools*", "ui*", "voice*"]
