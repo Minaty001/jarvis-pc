@@ -8,6 +8,8 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import gi
+gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, Gdk
 
 from ui.orb import OrbWidget, _hex_to_rgba  # noqa: F401  (import check for theme helpers)
@@ -49,12 +51,13 @@ def test_live_orb_draw():
 
     orb.connect("draw", on_draw)
     win.show_all()
-    # force one redraw + process a few events
-    while Gtk.events_pending():
-        Gtk.main_iteration_do(False)
     win.queue_draw()
-    while Gtk.events_pending():
+    for _ in range(10):
         Gtk.main_iteration_do(False)
+    import cairo
+    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, 240, 240)
+    cr = cairo.Context(surf)
+    orb.draw(cr)
     assert drawn["ok"], "OrbWidget draw signal never fired"
     orb.stop_animation()
     win.destroy()

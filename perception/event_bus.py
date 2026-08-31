@@ -77,6 +77,9 @@ class EventBus:
             cutoff = now - self._dedup_window * 2
             self._recent_events = {k: v for k, v in self._recent_events.items() if v > cutoff}
 
+        if self._queue is None:
+            return False
+
         try:
             self._queue.put_nowait(event)
             self._event_count += 1
