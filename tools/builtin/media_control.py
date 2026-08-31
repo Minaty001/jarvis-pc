@@ -1,21 +1,81 @@
 """
-Media Play — Play media, control system audio, and open YouTube/Spotify searches.
+Media Play — Direct video/song playback, volume control, and YouTube/Spotify integration.
 """
 
-import subprocess
+import re
 import shutil
-from typing import Any
-from urllib.parse import quote_plus
+import subprocess
+import urllib.parse
+import urllib.request
+from typing import Any, Optional
 
 from config.logger import get_logger
 
 logger = get_logger("tools.media_control")
 
 
+def _fetch_youtube_first_video_id(query: str) -> Optional[str]:
+    """Extract first matching YouTube video ID via fast scraping or yt-dlp."""
+    try:
+        url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query)}"
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        )
+        html = urllib.request.urlopen(req, timeout=3.0).read().decode("utf-8", errors="ignore")
+        video_ids = re.findall(r'"videoId":"([a-zA-Z0-9_-]{11})"', html)
+        if video_ids:
+            return video_ids[0]
+    except Exception as e:
+        logger.debug("Fast YouTube scrape error: %s", e)
+
+    # Fallback to yt-dlp if available
+    if shutil.which("yt-dlp"):
+        try:
+            res = subprocess.run(
+                ["yt-dlp", f"ytsearch1:{query}", "--get-id"],
+                capture_output=True, text=True, timeout=4,
+            )
+            vid = res.stdout.strip()
+            if vid and len(vid) == 11:
+                return vid
+        except Exception:
+            pass
+
+    return None
+
+
+def play_on_youtube(query: str) -> dict[str, Any]:
+    """Directly play a YouTube video or song in the browser."""
+    if not query or not query.strip():
+        url = "https://youtube.com"
+        subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"success": True, "result": "Opened YouTube"}
+
+    clean_query = query.strip()
+    video_id = _fetch_youtube_first_video_id(clean_query)
+
+    if video_id:
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        msg = f"Playing '{clean_query}' on YouTube"
+    else:
+        url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(clean_query)}"
+        msg = f"Opened YouTube search for '{clean_query}'"
+
+    try:
+        subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        logger.info(msg)
+        return {"success": True, "result": msg}
+    except Exception as e:
+        msg = f"Could not open YouTube: {e}"
+        logger.error(msg)
+        return {"success": False, "error": str(e), "result": msg}
+
+
 def media_play(query: str = "") -> dict[str, Any]:
-    """Play media or search for music/video."""
+    """Play media directly or search for music/video."""
     if query:
-        # Try to play with local apps first
+        # Try local desktop media players if query is a file or stream
         for player in ("rhythmbox", "vlc", "mpv", "audacious", "clementine"):
             if shutil.which(player):
                 try:
@@ -27,10 +87,8 @@ def media_play(query: str = "") -> dict[str, Any]:
                     return {"success": True, "result": f"Playing '{query}' in {player}"}
                 except Exception:
                     continue
-        # Fallback: open YouTube search
-        url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
-        subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {"success": True, "result": f"Searching YouTube for '{query}'"}
+        # Fallback: direct play on YouTube
+        return play_on_youtube(query)
 
     # Toggle playback via playerctl
     try:
@@ -85,37 +143,19 @@ def set_volume(level: str) -> dict[str, Any]:
         return {"success": False, "error": str(e), "result": f"Could not set volume to {level}"}
 
 
-def play_on_youtube(query: str) -> dict[str, Any]:
-    """Search and open a YouTube video/song in the browser."""
-    if not query:
-        url = "https://youtube.com"
-        subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {"success": True, "result": "Opened YouTube"}
-    url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
-    try:
-        subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        msg = f"Opened YouTube search for '{query}'"
-        logger.info(msg)
-        return {"success": True, "result": msg}
-    except Exception as e:
-        return {"success": False, "error": str(e), "result": f"Could not open YouTube: {e}"}
-
-
 def play_on_spotify(query: str) -> dict[str, Any]:
-    """Search and open a song on Spotify (browser fallback)."""
+    """Search and play a song on Spotify."""
     if not query:
         subprocess.Popen(["xdg-open", "https://open.spotify.com"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {"success": True, "result": "Opened Spotify"}
-    # Try Spotify URI first
     if shutil.which("spotify"):
         try:
-            subprocess.Popen(["spotify", f"--uri=spotify:search:{quote_plus(query)}"],
+            subprocess.Popen(["spotify", f"--uri=spotify:search:{urllib.parse.quote_plus(query)}"],
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return {"success": True, "result": f"Searching Spotify for '{query}'"}
+            return {"success": True, "result": f"Playing '{query}' on Spotify"}
         except Exception:
             pass
-    # Browser fallback
-    url = f"https://open.spotify.com/search/{quote_plus(query)}"
+    url = f"https://open.spotify.com/search/{urllib.parse.quote_plus(query)}"
     subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return {"success": True, "result": f"Opened Spotify search for '{query}'"}
