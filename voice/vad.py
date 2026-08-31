@@ -32,7 +32,7 @@ class VAD:
     def calibrate(self, ambient_audio: np.ndarray, multiplier: float = 3.0) -> None:
         """Calibrate threshold based on ambient noise."""
         energy = self.compute_energy(ambient_audio)
-        self._energy_threshold = energy * multiplier
+        self._energy_threshold = max(0.005, energy * multiplier)
         logger.info("VAD calibrated: threshold=%.4f (ambient=%.4f)", self._energy_threshold, energy)
 
     def detect_speech_segment(self, audio: np.ndarray, min_speech_ms: int = 300) -> tuple[bool, int, int]:

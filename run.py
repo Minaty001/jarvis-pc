@@ -41,6 +41,8 @@ def _should_run_ui() -> bool:
     if not display:
         return False
     try:
+        import gi
+        gi.require_version("Gtk", "3.0")
         from gi.repository import Gtk  # noqa: F401
         return True
     except Exception:

@@ -21,11 +21,17 @@ APP_MAP = {
     "settings": "gnome-control-center", "network": "nm-connection-editor",
     "htop": "gnome-terminal -- htop", "btop": "gnome-terminal -- btop",
     "obsidian": "obsidian", "notion": "notion-app",
+    "youtube": "xdg-open https://youtube.com",
+    "google": "xdg-open https://google.com",
+    "github": "xdg-open https://github.com",
+    "gmail": "xdg-open https://mail.google.com",
+    "whatsapp": "xdg-open https://web.whatsapp.com",
+    "twitter": "xdg-open https://x.com",
 }
 
 
 def open_app(app_name: str) -> dict[str, Any]:
-    """Open an application by name."""
+    """Open an application or web service by name."""
     name_lower = app_name.lower().strip()
     binary = APP_MAP.get(name_lower, name_lower)
 
@@ -40,9 +46,16 @@ def open_app(app_name: str) -> dict[str, Any]:
         logger.info(msg)
         return {"success": True, "result": msg}
     except FileNotFoundError:
-        msg = f"Application '{app_name}' not found"
-        logger.warning(msg)
-        return {"success": False, "error": msg, "result": msg}
+        # Fallback to xdg-open web URL or browser search
+        try:
+            url = f"https://{name_lower}.com" if "." not in name_lower else f"https://{name_lower}"
+            subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            msg = f"Opened {url} in browser"
+            return {"success": True, "result": msg}
+        except Exception as e:
+            msg = f"Application '{app_name}' not found: {e}"
+            logger.warning(msg)
+            return {"success": False, "error": msg, "result": msg}
     except Exception as e:
         msg = f"Failed to open {app_name}: {e}"
         logger.error(msg)
