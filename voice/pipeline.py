@@ -53,7 +53,7 @@ class VoicePipeline:
         self._tts_loop: Optional[asyncio.AbstractEventLoop] = None
         self._tts_thread: Optional[threading.Thread] = None
         self._last_wake_time: float = 0.0
-        self._wake_cooldown: float = 5.0  # seconds
+        self._wake_cooldown: float = 1.0  # seconds
         self._tts_playing: bool = False
         self._tts_lock: threading.Lock = threading.Lock()
         self._command_speech_chunks: int = 0
@@ -128,7 +128,7 @@ class VoicePipeline:
 
                 if len(self._wake_audio_buffer) >= self._WAKE_BUF_CHUNKS:
                     audio = np.concatenate(list(self._wake_audio_buffer))
-                    self._wake_audio_buffer.clear()
+                    self._wake_audio_buffer.popleft()  # Sliding window: shift 1 chunk
                     is_wake, score = wake_word_detector.detect(audio)
 
                     if is_wake:
