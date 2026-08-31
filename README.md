@@ -82,11 +82,22 @@ Jarvis/
 
 ---
 
-## 🚀 Quick Start
+## 🛠️ Step-by-Step Installation Guide (Linux Mint & Ubuntu)
 
-### 1. Environment Setup
+Follow these exact steps to set up and install JARVIS PC connected to the production cloud backend (`https://jarvis-pc-7e8k.onrender.com`):
 
-Clone or navigate to the repository directory and set up a Python virtual environment:
+### Step 1: Install System Dependencies
+Install required system packages for GTK3 desktop UI, PulseAudio/PipeWire audio capture, PortAudio, and FFmpeg:
+
+```bash
+sudo apt update && sudo apt install -y \
+    python3-venv python3-dev python3-gi \
+    libgtk-3-dev libgirepository1.0-dev \
+    pulseaudio portaudio19-dev ffmpeg desktop-file-utils
+```
+
+### Step 2: Create Virtual Environment & Install Python Packages
+Navigate to the project root directory, create a Python virtual environment, upgrade pip, and install all required packages:
 
 ```bash
 cd /home/shanu/Desktop/Jarvis
@@ -95,52 +106,58 @@ cd /home/shanu/Desktop/Jarvis
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Upgrade pip and install dependencies
+# Install core dependencies & openWakeWord ONNX wake word engine
 pip install --upgrade pip
 pip install -r requirements.txt
+pip install openwakeword
+pip install -e .
 ```
 
-### 2. Configuration (.env)
-
-Copy the example environment file and set your API key(s):
+### Step 3: Environment Configuration (.env)
+Set up your environment variables. Ensure the `JARVIS_API_URL` is pointed to the live production cloud backend:
 
 ```bash
 cp .env.example .env
-nano .env
 ```
 
-Key variables inside `.env`:
+Key configuration parameters inside `.env`:
 
 ```env
-# Primary LLM API Key (Groq is recommended - free tier available at console.groq.com)
+# Production Cloud Backend URL
+JARVIS_API_URL=https://jarvis-pc-7e8k.onrender.com
+
+# Primary LLM Key (Groq recommended)
 GROQ_API_KEY=gsk_your_groq_api_key_here
 
-# Optional LLM API Keys
-NVIDIA_API_KEY=nvapi-your_nvidia_key_here
-ZEN_API_KEY=your_zen_key_here
-OPENROUTER_API_KEY=sk-or-your_openrouter_key_here
-
-# Voice Pipeline Settings
+# Voice Settings
 JARVIS_VOICE=en-US-GuyNeural
 JARVIS_WAKE_THRESHOLD=0.8
 ```
 
-### 3. Installing to Linux Mint Desktop
-
-To install JARVIS as a native Linux Mint application (adding it to your Mint Application Menu and desktop launchers):
+### Step 4: Install Desktop Launcher, Icon & Autostart Entry
+Run the automated desktop installer script. This registers JARVIS natively into the Linux Mint Application Menu and configures autostart:
 
 ```bash
 source .venv/bin/activate
 python3 ui/install_desktop.py
 ```
 
-This installs:
+Files installed:
 - **Application Menu Entry**: `~/.local/share/applications/jarvis.desktop`
-- **Launcher Binary**: `~/.local/bin/jarvis-ui`
-- **App Icon**: `~/.local/share/icons/hicolor/256x256/apps/jarvis.png`
+- **Launcher Binary**: `/home/shanu/Desktop/Jarvis/bin/jarvis-ui`
+- **Application Icon**: `~/.local/share/icons/hicolor/256x256/apps/jarvis.png`
 - **Autostart Config**: `~/.config/autostart/jarvis.desktop`
 
-You can now launch **JARVIS** directly from your Linux Mint Application Menu or run `jarvis-ui` in your terminal.
+### Step 5: Test Cloud Backend Connectivity & Launch
+Verify that the remote cloud backend is online and launch JARVIS:
+
+```bash
+# Verify backend connection
+curl -s https://jarvis-pc-7e8k.onrender.com/health
+
+# Launch live GTK Desktop Application
+python3 run.py
+```
 
 ---
 
