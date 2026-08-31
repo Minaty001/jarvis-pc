@@ -2,6 +2,7 @@
 Media Play — Direct video/song playback, volume control, and YouTube/Spotify integration.
 """
 
+import os
 import re
 import shutil
 import subprocess
@@ -22,7 +23,7 @@ def _fetch_youtube_first_video_id(query: str) -> Optional[str]:
             url,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         )
-        html = urllib.request.urlopen(req, timeout=3.0).read().decode("utf-8", errors="ignore")
+        html = urllib.request.urlopen(req, timeout=3.5).read().decode("utf-8", errors="ignore")
         video_ids = re.findall(r'"videoId":"([a-zA-Z0-9_-]{11})"', html)
         if video_ids:
             return video_ids[0]
@@ -75,20 +76,22 @@ def play_on_youtube(query: str) -> dict[str, Any]:
 def media_play(query: str = "") -> dict[str, Any]:
     """Play media directly or search for music/video."""
     if query:
-        # Try local desktop media players if query is a file or stream
-        for player in ("rhythmbox", "vlc", "mpv", "audacious", "clementine"):
-            if shutil.which(player):
-                try:
-                    subprocess.Popen(
-                        [player, query],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-                    return {"success": True, "result": f"Playing '{query}' in {player}"}
-                except Exception:
-                    continue
-        # Fallback: direct play on YouTube
-        return play_on_youtube(query)
+        clean_query = query.strip()
+        # Use local players ONLY if query is an actual local file or audio/video URL
+        if os.path.exists(clean_query) or clean_query.startswith(("http://", "https://", "file://")):
+            for player in ("vlc", "mpv", "rhythmbox", "audacious", "clementine"):
+                if shutil.which(player):
+                    try:
+                        subprocess.Popen(
+                            [player, clean_query],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                        return {"success": True, "result": f"Playing '{clean_query}' in {player}"}
+                    except Exception:
+                        continue
+        # For general song/video search queries ("play kuku song"), default to YouTube Direct Play
+        return play_on_youtube(clean_query)
 
     # Toggle playback via playerctl
     try:
