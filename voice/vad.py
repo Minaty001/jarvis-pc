@@ -17,9 +17,9 @@ logger = get_logger("voice.vad")
 class VAD:
     """Energy-based Voice Activity Detection for float32 PCM audio."""
 
-    # Float32 PCM from sounddevice: silence ≈ 0.0001–0.002, speech ≈ 0.02–0.3
-    _MIN_THRESHOLD = 0.02   # Hard floor — anything below is background hiss
-    _MAX_THRESHOLD = 0.3    # Hard ceiling — clip very loud environments
+    # Float32 PCM from sounddevice: silence ≈ 0.0001–0.001, speech ≈ 0.004–0.3
+    _MIN_THRESHOLD = 0.003   # Hard floor — anything below is background hiss
+    _MAX_THRESHOLD = 0.15    # Hard ceiling — clip very loud environments
 
     def __init__(self, threshold: float = None, sample_rate: int = None):
         self.threshold = threshold or settings.vad_threshold

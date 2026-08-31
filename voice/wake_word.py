@@ -142,7 +142,7 @@ class WakeWordDetector:
 
         # Fast pre-filter: don't run ONNX on silent audio
         rms = float(np.sqrt(np.mean(audio.astype(np.float32) ** 2)))
-        if rms < 0.008:
+        if rms < 0.002:
             return False, 0.0
 
         try:
