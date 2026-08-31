@@ -70,65 +70,50 @@ class CognitiveOrchestrator:
         task_id: Optional[str] = None,
     ) -> dict[str, Any]:
         """
-        Main entry point: process a user goal through the full cognitive loop.
+        Main entry point: process a user goal through the canonical TaskManager engine.
         Returns the final result.
         """
-        task_id = task_id or f"task-{str(uuid.uuid4())[:8]}"
+        from task_engine.manager import task_manager
         start_time = time.time()
+        logger.info("Processing goal: '%s'", goal[:80])
 
-        logger.info("Processing goal: '%s' (task=%s)", goal[:80], task_id)
-
-        # Update world state
         world_state.update(
             current_goal=goal,
-            active_task_id=task_id,
-            task_status="planning",
+            task_status="running",
         )
 
-        # Emit goal event
-        if self._event_bus:
-            from perception.event_models import Event, EventType
-            await self._event_bus.publish(Event(
-                type=EventType.USER,
-                source="orchestrator",
-                payload={"goal": goal, "task_id": task_id},
-            ))
-
         try:
-            # Phase 1: UNDERSTAND — Classify intent
-            intent = await self._understand(goal)
-
-            # Phase 2: PLAN — Create execution plan
-            plan = await self._plan(goal, intent)
-
-            # Phase 3: EXECUTE — Run through plan steps
-            result = await self._execute_plan(plan, task_id)
-
-            # Phase 4: VERIFY — Check final result
-            verification = await self._verify_final(result, goal)
-
-            # Phase 5: RECORD — Store experience
-            await self._record_experience(task_id, goal, plan, result, verification)
-
+            task = await task_manager.submit(goal)
+            # Poll for task completion (max 120s)
+            for _ in range(240):
+                await asyncio.sleep(0.5)
+                status = await task_manager.status(task.id)
+                if status.get("state") in ("COMPLETED", "PARTIALLY_COMPLETED", "FAILED", "CANCELLED"):
+                    break
             duration = time.time() - start_time
+            steps_summary = status.get("steps", [])
+            results = [
+                s.get("result") for s in steps_summary
+                if s.get("result") and s.get("result") != "None"
+            ]
             final_result = {
-                "task_id": task_id,
-                "status": "completed",
+                "task_id": task.id,
+                "status": "completed" if status.get("state") in ("COMPLETED", "PARTIALLY_COMPLETED") else "failed",
                 "goal": goal,
-                "plan_steps": len(plan.get("steps", [])),
-                "result": result,
-                "verification": verification,
+                "plan_steps": len(steps_summary),
+                "result": {
+                    "results": [{"result": r} for r in results],
+                    "steps_summary": steps_summary,
+                },
                 "duration_sec": round(duration, 2),
             }
-
             world_state.update(task_status="idle", current_goal="", active_task_id="")
             return final_result
-
         except Exception as e:
             logger.error("Goal processing failed: %s", e, exc_info=True)
             world_state.update(task_status="idle")
             return {
-                "task_id": task_id,
+                "task_id": task_id or "task-failed",
                 "status": "failed",
                 "goal": goal,
                 "error": str(e),

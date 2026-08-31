@@ -119,6 +119,10 @@ async def _bootstrap_engine():
         tool_registry.register(t)
     logger.info("Registered %d builtin tools", len(_builtin_tools))
 
+    from task_engine.manager import task_manager
+    await task_manager.startup()
+    logger.info("TaskManager initialized")
+
 
     # Check hardware permissions (mic, speaker, camera)
     from voice.permissions import permission_manager
