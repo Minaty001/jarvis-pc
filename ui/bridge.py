@@ -78,6 +78,16 @@ class UIBridge:
                 self.proactive_engine.add_callback(self._on_proactive)
             except Exception as e:
                 logger.warning("Could not register proactive callback: %s", e)
+        # task_manager approval notifications
+        try:
+            from task_engine.manager import task_manager
+            async def _notify(msg: dict):
+                if msg.get("approval_id"):
+                    action = msg.get("action", "action")
+                    self._idle(self.on_chat, "jarvis", f"⚠️ Approval needed for '{action}' — say 'approve' or 'deny'")
+            task_manager.set_notify_callback(_notify)
+        except Exception as e:
+            logger.warning("Could not set task_manager notify callback: %s", e)
         # 1 Hz poll for world state / system metrics
         self._poll_id = GLib.timeout_add(1000, self._poll)
         logger.info("UIBridge started")
