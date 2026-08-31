@@ -66,9 +66,7 @@ class UIBridge:
         # subscribe to events (event_bus is async; dispatch from our loop)
         if self.event_bus:
             try:
-                fut = asyncio.run_coroutine_threadsafe(
-                    self.event_bus.subscribe_all(self._on_event), self._loop)
-                fut.result(timeout=5)
+                self.event_bus.subscribe_all(self._on_event)
             except Exception as e:
                 logger.warning("Could not subscribe to event_bus: %s", e)
         # proactive suggestions
