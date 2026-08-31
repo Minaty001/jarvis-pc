@@ -223,10 +223,14 @@ class UIBridge:
         if status == "completed":
             results = result.get("result", {}).get("results", [])
             if results:
-                last = results[-1]
-                r = last.get("result")
-                if r:
-                    return str(r)
+                outputs = []
+                for step_res in results:
+                    if isinstance(step_res, dict):
+                        r = step_res.get("result") or step_res.get("output")
+                        if r and str(r).strip():
+                            outputs.append(str(r).strip())
+                if outputs:
+                    return "\n".join(outputs)
             return f"Task done in {result.get('duration_sec', 0):.1f}s."
         if status == "failed":
             return f"I couldn't complete that: {result.get('error', 'unknown error')}"

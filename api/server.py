@@ -393,11 +393,14 @@ class JarvisAPIHandler(BaseHTTPRequestHandler):
                 exec_result = result.get("result", {})
                 results = exec_result.get("results", [])
                 if results:
-                    last_result = results[-1]
-                    if isinstance(last_result, dict):
-                        r = last_result.get("result", "")
-                        if r:
-                            return str(r)
+                    outputs = []
+                    for step_res in results:
+                        if isinstance(step_res, dict):
+                            r = step_res.get("result") or step_res.get("output")
+                            if r and str(r).strip():
+                                outputs.append(str(r).strip())
+                    if outputs:
+                        return "\n".join(outputs)
                 duration = result.get("duration_sec", 0)
                 return f"Done in {duration:.1f}s"
             return f"Task status: {result.get('status', 'unknown')}"

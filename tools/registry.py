@@ -136,3 +136,54 @@ class ToolRegistry:
 
 
 tool_registry = ToolRegistry()
+
+
+def _register_defaults(registry: ToolRegistry):
+    try:
+        from tools.builtin import app_control, media_control, shell_exec, web_search
+        _builtin_tools = [
+            ToolDef(name="open_app", description="Open an application by name",
+                    category=ToolCategory.APPLICATION, risk_level=RiskLevel.LOW,
+                    handler=app_control.open_app,
+                    parameters={"app_name": {"type": "string", "required": True}}),
+            ToolDef(name="close_app", description="Close an application",
+                    category=ToolCategory.APPLICATION, risk_level=RiskLevel.LOW,
+                    handler=app_control.close_app,
+                    parameters={"app_name": {"type": "string", "required": True}}),
+            ToolDef(name="media_play", description="Play media or search music",
+                    category=ToolCategory.COMPUTER, risk_level=RiskLevel.LOW,
+                    handler=media_control.media_play,
+                    parameters={"query": {"type": "string", "required": False}}),
+            ToolDef(name="media_pause", description="Pause media playback",
+                    category=ToolCategory.COMPUTER, risk_level=RiskLevel.LOW,
+                    handler=media_control.media_pause),
+            ToolDef(name="set_volume", description="Set system volume level",
+                    category=ToolCategory.COMPUTER, risk_level=RiskLevel.LOW,
+                    handler=media_control.set_volume,
+                    parameters={"level": {"type": "string", "required": True}}),
+            ToolDef(name="play_on_youtube",
+                    description="Search and play a song or video on YouTube in the browser",
+                    category=ToolCategory.NETWORK, risk_level=RiskLevel.LOW,
+                    handler=media_control.play_on_youtube,
+                    parameters={"query": {"type": "string", "required": True}}),
+            ToolDef(name="play_on_spotify",
+                    description="Search and play a song on Spotify",
+                    category=ToolCategory.NETWORK, risk_level=RiskLevel.LOW,
+                    handler=media_control.play_on_spotify,
+                    parameters={"query": {"type": "string", "required": True}}),
+            ToolDef(name="run_command", description="Execute a shell command",
+                    category=ToolCategory.SYSTEM, risk_level=RiskLevel.HIGH,
+                    handler=shell_exec.run_command, requires_confirmation=True,
+                    parameters={"command": {"type": "string", "required": True}}),
+            ToolDef(name="web_search", description="Search the web",
+                    category=ToolCategory.NETWORK, risk_level=RiskLevel.LOW,
+                    handler=web_search.web_search,
+                    parameters={"query": {"type": "string", "required": True}}),
+        ]
+        for t in _builtin_tools:
+            registry.register(t)
+    except Exception:
+        pass
+
+
+_register_defaults(tool_registry)
