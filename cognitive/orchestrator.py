@@ -185,8 +185,39 @@ class CognitiveOrchestrator:
         """Create an execution plan for the goal."""
         logger.info("Phase 2: PLAN — creating execution plan")
 
-        # Fast path: deterministic intents via pattern matching
+        import re
         from core.intent_resolver import intent_resolver
+
+        # Compound check: split goal on conjunctions like "aur uske baad", "or uske baad", "and then", "after that"
+        compound_splitters = [
+            r"\s+aur\s+uske\s+baad\s+", r"\s+or\s+uske\s+baad\s+", r"\s+phir\s+",
+            r"\s+and\s+then\s+", r"\s+after\s+that\s+", r"\s+then\s+",
+        ]
+        regex = "|".join(compound_splitters)
+        sub_goals = [s.strip() for s in re.split(regex, goal, flags=re.IGNORECASE) if s.strip()]
+
+        if len(sub_goals) > 1:
+            steps = []
+            for i, sub_g in enumerate(sub_goals):
+                sub_res = intent_resolver.resolve(sub_g)
+                tool_n = sub_res.action
+                params = sub_res.parameters
+                if tool_n == "chat" or not tool_n:
+                    tool_n = "web_search"
+                    params = {"query": sub_g}
+                steps.append({
+                    "id": f"step-{i+1}",
+                    "description": sub_g,
+                    "tool": tool_n,
+                    "parameters": params,
+                    "dependencies": [f"step-{i}"] if i > 0 else [],
+                    "risk_level": 0,
+                    "status": "pending",
+                })
+            logger.info("Decomposed compound goal into %d sequential steps", len(steps))
+            return {"goal": goal, "steps": steps}
+
+        # Fast path: deterministic intents via pattern matching
         resolved = intent_resolver.resolve(goal)
         if resolved.confidence >= 0.9 and resolved.action != "chat":
             # Map intent actions to registered tool names

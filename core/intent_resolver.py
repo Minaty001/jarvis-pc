@@ -22,24 +22,34 @@ class Intent:
     raw_text: str = ""
 
 
-# ── Pattern-based intent mappings ────────────────────────────────────────────
-# Each entry: (regex_pattern, handler_fn) where handler returns (action, params)
+def clean_conversational_fillers(text: str) -> str:
+    """Strip leading conversational fillers (e.g. 'ek kaam karo pehle', 'pls', 'suno')."""
+    cleaned = re.sub(
+        r"^(?:ek\s+kaam\s+karo\s+|pehle\s+|pls\s+|please\s+|suno\s+|jarvis\s+)+",
+        "", text, flags=re.IGNORECASE,
+    ).strip()
+    return cleaned
 
+
+# ── Pattern-based intent mappings ────────────────────────────────────────────
 PATTERNS = [
     # ── YouTube play (English + Hinglish) ────────────────────────────────
-    # "play headlights on youtube", "youtube pe headlights chalao"
-    (r"play\s+(.+?)\s+on\s+youtube",           lambda m: ("play_on_youtube", {"query": m.group(1).strip()})),
-    (r"youtube\s+(?:pe|par|mein|on)?\s*(.+?)\s+(?:chalao|play|bajao|lagao|chala)",
-                                                lambda m: ("play_on_youtube", {"query": m.group(1).strip()})),
-    (r"(?:chalao|play|bajao|lagao)\s+(.+?)\s+(?:youtube\s+(?:pe|par|mein|on)|on\s+youtube)",
-                                                lambda m: ("play_on_youtube", {"query": m.group(1).strip()})),
-    (r"youtube\s+pe\s+(.+)",                    lambda m: ("play_on_youtube", {"query": m.group(1).strip()})),
-    (r"search\s+youtube\s+(?:for\s+)?(.+)",     lambda m: ("play_on_youtube", {"query": m.group(1).strip()})),
+    (r"play\s+(.+?)\s+on\s+youtube",
+        lambda m: ("play_on_youtube", {"query": m.group(1).strip()})),
+    (r"youtube\s+(?:pe|par|mein|on)?\s*(.+?)\s+(?:chalao|play|bajao|lagao|chala)$",
+        lambda m: ("play_on_youtube", {"query": m.group(1).strip()})),
+    (r"(?:chalao|play|bajao|lagao)\s+(.+?)\s+(?:youtube\s+(?:pe|par|mein|on)|on\s+youtube)$",
+        lambda m: ("play_on_youtube", {"query": m.group(1).strip()})),
+    (r"youtube\s+pe\s+(.+?)(?:\s+(?:chalao|play|bajao|lagao))?$",
+        lambda m: ("play_on_youtube", {"query": m.group(1).strip()})),
+    (r"search\s+youtube\s+(?:for\s+)?(.+)",
+        lambda m: ("play_on_youtube", {"query": m.group(1).strip()})),
 
     # ── Spotify play ─────────────────────────────────────────────────────
-    (r"play\s+(.+?)\s+on\s+spotify",            lambda m: ("play_on_spotify", {"query": m.group(1).strip()})),
-    (r"spotify\s+(?:pe|par|mein|on)?\s*(.+?)\s+(?:chalao|play|bajao|lagao|chala)",
-                                                lambda m: ("play_on_spotify", {"query": m.group(1).strip()})),
+    (r"play\s+(.+?)\s+on\s+spotify",
+        lambda m: ("play_on_spotify", {"query": m.group(1).strip()})),
+    (r"spotify\s+(?:pe|par|mein|on)?\s*(.+?)\s+(?:chalao|play|bajao|lagao|chala)$",
+        lambda m: ("play_on_spotify", {"query": m.group(1).strip()})),
 
     # ── App control ───────────────────────────────────────────────────────
     (r"open\s+(.+)",     lambda m: ("open_app",  {"app_name": m.group(1).strip()})),
@@ -53,11 +63,11 @@ PATTERNS = [
 
     # ── System info ───────────────────────────────────────────────────────
     (r"what(?:'s| is)(?: the)? time|current time|kitna baja|time batao",
-                         lambda m: ("get_time", {})),
+        lambda m: ("get_time", {})),
     (r"what(?:'s| is)(?: the)? date|today(?:'s| is)(?: the)? date|aaj ki date",
-                         lambda m: ("get_date", {})),
+        lambda m: ("get_date", {})),
     (r"battery|battery level|battery status|kitni battery",
-                         lambda m: ("get_battery", {})),
+        lambda m: ("get_battery", {})),
     (r"cpu|cpu usage|processor",     lambda m: ("get_cpu", {})),
     (r"memory|ram|memory usage",     lambda m: ("get_memory", {})),
     (r"disk|storage|disk space",     lambda m: ("get_disk", {})),
@@ -72,19 +82,20 @@ PATTERNS = [
     (r"search\s+(?:for\s+)?(.+)",               lambda m: ("web_search", {"query": m.group(1).strip()})),
     (r"google\s+(.+)",                           lambda m: ("web_search", {"query": m.group(1).strip()})),
     (r"dhundho\s+(.+)|(.+)\s+dhundho",          lambda m: ("web_search", {"query": (m.group(1) or m.group(2)).strip()})),
+    (r"(.+)\s+(?:dikhao|dikha\s+do|show)",     lambda m: ("web_search", {"query": m.group(1).strip()})),
 
     # ── Screenshot ───────────────────────────────────────────────────────
     (r"screenshot|take (?:a )?screenshot|capture screen|screen capture",
-                         lambda m: ("screenshot", {})),
+        lambda m: ("screenshot", {})),
 
     # ── Clipboard ────────────────────────────────────────────────────────
     (r"copy\s+(.+)",     lambda m: ("clipboard_copy",  {"text": m.group(1).strip()})),
     (r"paste|what(?:'s| is) (?:on |in )?my clipboard",
-                         lambda m: ("clipboard_paste", {})),
+        lambda m: ("clipboard_paste", {})),
 
     # ── Volume ───────────────────────────────────────────────────────────
     (r"volume\s+(up|down|higher|lower|\d+)(?:\s*%)?",
-                         lambda m: ("set_volume", {"level": m.group(1)})),
+        lambda m: ("set_volume", {"level": m.group(1)})),
     (r"mute|sound off",  lambda m: ("set_volume", {"level": "mute"})),
     (r"volume\s+(?:up|badha(?:o)?)",            lambda m: ("set_volume", {"level": "up"})),
     (r"volume\s+(?:down|ghata(?:o)?|kam)",      lambda m: ("set_volume", {"level": "down"})),
@@ -115,7 +126,8 @@ class IntentResolver:
     """Resolve user text to structured intent using ordered pattern list."""
 
     def resolve(self, text: str) -> Intent:
-        text_lower = text.lower().strip()
+        cleaned = clean_conversational_fillers(text)
+        text_lower = cleaned.lower().strip()
 
         for pattern, handler in PATTERNS:
             match = re.search(pattern, text_lower)
