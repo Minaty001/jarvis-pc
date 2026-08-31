@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
     ffmpeg \
+    portaudio19-dev \
+    libportaudio2 \
     libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 

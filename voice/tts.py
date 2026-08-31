@@ -26,8 +26,9 @@ try:
     import sounddevice as sd
     import soundfile as sf
     HAS_PLAYBACK = True
-except ImportError:
+except (ImportError, OSError, Exception) as e:
     HAS_PLAYBACK = False
+    logger.warning("sounddevice/soundfile audio playback unavailable: %s", e)
 
 
 def _ensure_pulseaudio_output() -> bool:
