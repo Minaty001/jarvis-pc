@@ -91,16 +91,22 @@ class SystemMonitor:
                 net_rate["bytes_recv_rate"] = (net.bytes_recv - self._prev_net.bytes_recv) / dt
             self._prev_net = net
 
-            # Top processes by CPU
-            top_procs = []
-            for proc in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent"]):
-                try:
-                    info = proc.info
-                    if info["cpu_percent"] and info["cpu_percent"] > 0:
-                        top_procs.append(info)
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
-            top_procs.sort(key=lambda p: p.get("cpu_percent", 0), reverse=True)
+            # Top processes by CPU (sample every 30s to save /proc/ reads)
+            now = time.time()
+            if not hasattr(self, '_last_proc_scan_time') or now - getattr(self, '_last_proc_scan_time', 0) >= 30.0:
+                top_procs = []
+                for proc in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent"]):
+                    try:
+                        info = proc.info
+                        if info["cpu_percent"] and info["cpu_percent"] > 0:
+                            top_procs.append(info)
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+                top_procs.sort(key=lambda p: p.get("cpu_percent", 0), reverse=True)
+                self._cached_top_procs = top_procs[:5]
+                self._last_proc_scan_time = now
+            else:
+                top_procs = getattr(self, '_cached_top_procs', [])
 
             return {
                 "cpu_percent": cpu_percent,
@@ -114,7 +120,7 @@ class SystemMonitor:
                 "net_recv_total": net.bytes_recv,
                 "net_sent_rate": net_rate["bytes_sent_rate"],
                 "net_recv_rate": net_rate["bytes_recv_rate"],
-                "top_processes": top_procs[:5],
+                "top_processes": top_procs,
                 "uptime": time.time() - psutil.boot_time(),
             }
         except Exception as e:

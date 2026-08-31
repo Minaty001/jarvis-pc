@@ -63,6 +63,15 @@ class OrbWidget(Gtk.DrawingArea):
             GLib.source_remove(self._timer)
             self._timer = None
 
+    def pause_animation(self) -> None:
+        if self._timer:
+            GLib.source_remove(self._timer)
+            self._timer = None
+
+    def resume_animation(self) -> None:
+        if self._animating and not self._timer:
+            self._timer = GLib.timeout_add(33, self._tick_anim)
+
     # ── animation loop ──────────────────────────────────────────────────
     def _tick_anim(self) -> bool:
         if not self._animating:

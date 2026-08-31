@@ -108,22 +108,21 @@ class ApplicationMonitor:
 
     async def _check_focus(self) -> None:
         """Check current window focus and emit events on change."""
-        window_id = _run_xdotool("getactivewindow")
-        if not window_id:
+        # Run single xdotool command to get both window ID and name in 1 subprocess call
+        window_name = _run_xdotool("getactivewindow", "getwindowname")
+        if not window_name:
             return
 
-        window_name = _run_xdotool("getwindowname", window_id)
         app_name = _normalize_app_name(window_name)
 
         # Detect focus change
-        if window_id != self._last_focused_window:
+        if window_name != self._last_focused_window:
             old_app = self._last_focused_app
 
             # Publish window focus event
             await event_bus.publish(make_event(
                 EventType.WINDOW, "app_monitor",
                 {
-                    "window_id": window_id,
                     "window_name": window_name,
                     "app_name": app_name,
                     "previous_app": old_app,
@@ -140,7 +139,7 @@ class ApplicationMonitor:
             if len(self._window_history) > 100:
                 self._window_history = self._window_history[-100:]
 
-            self._last_focused_window = window_id
+            self._last_focused_window = window_name
 
             # Publish app event if app changed (check before updating)
             if app_name != self._last_focused_app:

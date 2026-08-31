@@ -205,6 +205,13 @@ class MainWindow(Gtk.ApplicationWindow):
         box.pack_start(msg, False, False, 0)
         row.add(box)
         self._chat_list.add(row)
+
+        # Cap chat history at 100 rows to prevent GTK widget bloat
+        children = self._chat_list.get_children()
+        if len(children) > 100:
+            for child in children[:len(children) - 100]:
+                self._chat_list.remove(child)
+
         self._chat_list.show_all()
         # scroll to bottom
         GLib.idle_add(self._scroll_chat_bottom)
@@ -267,12 +274,16 @@ class MainWindow(Gtk.ApplicationWindow):
 
     # ── window lifecycle ───────────────────────────────────────────────
     def _do_hide(self):
+        if hasattr(self, 'orb'):
+            self.orb.pause_animation()
         self.hide()
         if self._on_hide:
             self._on_hide()
 
     def _on_delete(self, widget, event):
         # Hide instead of destroy — keeps JARVIS running in background (orb).
+        if hasattr(self, 'orb'):
+            self.orb.pause_animation()
         self.hide()
         if self._on_hide:
             self._on_hide()
@@ -280,7 +291,11 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def toggle_visible(self):
         if self.get_visible() and self.get_realized():
+            if hasattr(self, 'orb'):
+                self.orb.pause_animation()
             self.hide()
         else:
             self.show_all()
+            if hasattr(self, 'orb'):
+                self.orb.resume_animation()
             self.present()

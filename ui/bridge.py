@@ -47,6 +47,9 @@ class UIBridge:
         self._thread = None
         self._running = False
         self._poll_id = None
+        self._last_summary_time = 0.0
+        self._cached_tools_txt = ""
+        self._cached_mem_txt = ""
 
         # UI hooks (set by JarvisApp)
         self.on_orb_state = None        # (state:str) -> None
@@ -99,6 +102,7 @@ class UIBridge:
         if not self._running:
             return False
         try:
+            now = time.time()
             # system metrics
             if self.system_monitor:
                 snap = self.system_monitor.get_snapshot()
@@ -114,13 +118,16 @@ class UIBridge:
                 goal = getattr(ws, "current_goal", "")
                 if goal and self.on_status:
                     self._idle(self.on_status, f"Working: {goal[:60]}")
-                # tools summary
-                if self.on_tools:
-                    tools_txt = self._tools_summary()
-                    if tools_txt:
-                        self._idle(self.on_tools, tools_txt)
-                if self.on_memory:
-                    self._idle(self.on_memory, self._memory_summary())
+                # Refresh tools/memory summaries every 10 seconds (avoids 1 Hz overhead)
+                if now - self._last_summary_time >= 10.0 or not self._cached_tools_txt:
+                    self._cached_tools_txt = self._tools_summary()
+                    self._cached_mem_txt = self._memory_summary()
+                    self._last_summary_time = now
+
+                if self.on_tools and self._cached_tools_txt:
+                    self._idle(self.on_tools, self._cached_tools_txt)
+                if self.on_memory and self._cached_mem_txt:
+                    self._idle(self.on_memory, self._cached_mem_txt)
         except Exception as e:
             logger.debug("poll error: %s", e)
         return True
