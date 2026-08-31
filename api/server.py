@@ -376,7 +376,12 @@ class JarvisAPIHandler(BaseHTTPRequestHandler):
             loop = asyncio.new_event_loop()
             result = loop.run_until_complete(self._process_chat(message))
             loop.close()
-            self._json_response(200, {"response": result})
+            # Return both keys for compatibility with all clients
+            self._json_response(200, {
+                "response_text": result,
+                "result": result,
+                "response": result,
+            })
         except Exception as e:
             logger.error("Chat error: %s", e)
             self._json_response(500, {"error": str(e)})
@@ -385,18 +390,28 @@ class JarvisAPIHandler(BaseHTTPRequestHandler):
         if self.engine and hasattr(self.engine, 'process_goal'):
             result = await self.engine.process_goal(message)
             if result.get("status") == "completed":
-                results = result.get("result", {}).get("results", [])
+                exec_result = result.get("result", {})
+                results = exec_result.get("results", [])
                 if results:
                     last_result = results[-1]
-                    if last_result.get("result"):
-                        return str(last_result["result"])
-                return f"Task completed in {result.get('duration_sec', 0):.1f}s"
+                    if isinstance(last_result, dict):
+                        r = last_result.get("result", "")
+                        if r:
+                            return str(r)
+                duration = result.get("duration_sec", 0)
+                return f"Done in {duration:.1f}s"
             return f"Task status: {result.get('status', 'unknown')}"
 
         try:
             from llm.gateway import llm_gateway
             response = await llm_gateway.generate(
-                prompt=message, task_type="chat", max_tokens=1024,
+                prompt=message,
+                system_prompt=(
+                    "You are JARVIS, an intelligent AI assistant for Linux desktop. "
+                    "Be concise, helpful, and friendly. Respond in the same language the user uses."
+                ),
+                task_type="chat",
+                max_tokens=1024,
             )
             return response.text
         except Exception as e:

@@ -1,11 +1,18 @@
 """
 Voice Pipeline — Orchestrates the full voice interaction loop.
 Mic → VAD → Wake Word → STT → Brain → TTS
+
+Optimisations applied:
+- Wake buffer uses collections.deque(maxlen) — O(1) append, no pop(0)
+- Brain result runs on the shared TTS loop (no new event loop per command)
+- Post-TTS mute managed solely by _speak_with_mute; no premature pre-set
+- VAD calibration now enforces minimum threshold (in vad.py)
 """
 
 import asyncio
 import time
 import threading
+from collections import deque
 from typing import Any, Optional
 
 import numpy as np
@@ -20,15 +27,27 @@ from voice.tts import edge_tts_engine
 
 logger = get_logger("voice.pipeline")
 
+# Whisper silence/noise hallucination blacklist
+_HALLUCINATIONS = frozenset({
+    "thank you.", "thank you", "subtitles by", "subtitles", "you",
+    "bye", "bye.", "thank you for watching", "thanks for watching",
+    "subscribe", "chuckles", "sighs", "laughter", "...", ". . .",
+})
+
 
 class VoicePipeline:
     """Full voice interaction pipeline."""
+
+    _WAKE_BUF_CHUNKS = 34   # ~1 s at 30 ms/chunk
+    _MAX_SILENCE     = 30   # 30 × 30 ms = 900 ms → end command
+    _MAX_WAKE_SIL    = 100  # 100 × 30 ms = 3 s → timeout
 
     def __init__(self, brain: Any = None):
         self.brain = brain
         self._running = False
         self._listening_for_command = False
-        self._wake_audio_buffer: list[np.ndarray] = []
+        # O(1) append/discard; automatically caps at maxlen
+        self._wake_audio_buffer: deque[np.ndarray] = deque(maxlen=self._WAKE_BUF_CHUNKS)
         self._command_audio_buffer: list[np.ndarray] = []
         self._thread: Optional[threading.Thread] = None
         self._tts_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -39,6 +58,8 @@ class VoicePipeline:
         self._tts_lock: threading.Lock = threading.Lock()
         self._command_speech_chunks: int = 0
         self._post_tts_until: float = 0.0
+
+    # ── Lifecycle ────────────────────────────────────────────────────────
 
     def _start_tts_loop(self) -> None:
         """Start a dedicated event loop for TTS in a background thread."""
@@ -57,7 +78,7 @@ class VoicePipeline:
         # Start microphone
         microphone.start()
 
-        # Calibrate VAD with ambient noise
+        # Calibrate VAD with 1 s of ambient noise
         logger.info("Calibrating VAD with ambient noise...")
         ambient = microphone.read_blocking(duration_sec=1.0)
         if ambient is not None:
@@ -66,6 +87,8 @@ class VoicePipeline:
         # Start TTS event loop in background thread
         self._tts_thread = threading.Thread(target=self._start_tts_loop, daemon=True)
         self._tts_thread.start()
+        # Give the loop a moment to start
+        time.sleep(0.05)
 
         # Start pipeline loop
         self._running = True
@@ -73,12 +96,12 @@ class VoicePipeline:
         self._thread.start()
         logger.info("Voice pipeline started")
 
+    # ── Main loop ────────────────────────────────────────────────────────
+
     def _run_loop(self) -> None:
-        """Main voice pipeline loop (runs in thread)."""
+        """Main voice pipeline loop (runs in dedicated thread)."""
         silence_chunks = 0
-        max_silence = 30  # 30 * 30ms = 900ms silence to end command
         wake_silence_chunks = 0
-        max_wake_silence = 100  # 100 * 30ms = 3s max wait for speech after wake
 
         while self._running:
             chunk = microphone.read(timeout=0.1)
@@ -87,7 +110,7 @@ class VoicePipeline:
 
             now = time.time()
 
-            # Mute mic and skip audio while TTS is playing or in post-TTS grace period
+            # Mute mic while TTS is playing or in post-TTS grace period
             with self._tts_lock:
                 tts_active = self._tts_playing
             if tts_active or now < self._post_tts_until:
@@ -97,18 +120,16 @@ class VoicePipeline:
                 continue
 
             if not self._listening_for_command:
-                # Phase 1: Listen for wake word
+                # ── Phase 1: Listen for wake word ──────────────────────
                 if now - self._last_wake_time < self._wake_cooldown:
                     continue
 
                 self._wake_audio_buffer.append(chunk)
-                if len(self._wake_audio_buffer) > 34:  # ~1 second buffer
-                    self._wake_audio_buffer.pop(0)
 
-                if len(self._wake_audio_buffer) >= 34:
-                    audio = np.concatenate(self._wake_audio_buffer)
-                    is_wake, score = wake_word_detector.detect(audio)
+                if len(self._wake_audio_buffer) >= self._WAKE_BUF_CHUNKS:
+                    audio = np.concatenate(list(self._wake_audio_buffer))
                     self._wake_audio_buffer.clear()
+                    is_wake, score = wake_word_detector.detect(audio)
 
                     if is_wake:
                         logger.info("Wake word detected! (score=%.3f)", score)
@@ -118,7 +139,7 @@ class VoicePipeline:
                         silence_chunks = 0
                         wake_silence_chunks = 0
             else:
-                # Phase 2: Collect command audio
+                # ── Phase 2: Collect command audio ─────────────────────
                 self._command_audio_buffer.append(chunk)
 
                 if vad.is_speech(chunk):
@@ -128,18 +149,17 @@ class VoicePipeline:
                     silence_chunks += 1
                     wake_silence_chunks += 1
 
-                # End command on silence (only if we heard some speech)
-                if silence_chunks >= max_silence and self._command_speech_chunks > 5:
+                # End command on trailing silence (min 5 speech chunks heard)
+                if silence_chunks >= self._MAX_SILENCE and self._command_speech_chunks > 5:
                     self._process_command()
                     self._listening_for_command = False
                     self._command_audio_buffer.clear()
                     self._last_wake_time = time.time()
-                    self._post_tts_until = time.time() + 1.0
                     silence_chunks = 0
                     self._command_speech_chunks = 0
 
-                # Timeout: no speech at all after wake word
-                elif wake_silence_chunks >= max_wake_silence and self._command_speech_chunks == 0:
+                # Timeout: no speech detected after wake word
+                elif wake_silence_chunks >= self._MAX_WAKE_SIL and self._command_speech_chunks == 0:
                     logger.info("No speech after wake word, going back to listening")
                     self._listening_for_command = False
                     self._command_audio_buffer.clear()
@@ -147,22 +167,22 @@ class VoicePipeline:
                     silence_chunks = 0
                     wake_silence_chunks = 0
 
+    # ── TTS ──────────────────────────────────────────────────────────────
+
     def _speak_async(self, text: str) -> None:
-        """Speak text asynchronously via the TTS event loop, muting mic during playback."""
-        if self._tts_loop and self._tts_loop.is_running() and not self._tts_loop.is_closed():
+        """Schedule TTS on the dedicated event loop (non-blocking)."""
+        loop = self._tts_loop
+        if loop and loop.is_running() and not loop.is_closed():
             with self._tts_lock:
                 self._tts_playing = True
             try:
-                future = asyncio.run_coroutine_threadsafe(
-                    self._speak_with_mute(text),
-                    self._tts_loop,
-                )
+                asyncio.run_coroutine_threadsafe(self._speak_with_mute(text), loop)
             except RuntimeError:
                 with self._tts_lock:
                     self._tts_playing = False
 
     async def _speak_with_mute(self, text: str) -> None:
-        """Speak text and manage mic mute state."""
+        """Speak text and manage mic mute state including post-TTS grace period."""
         try:
             await edge_tts_engine.speak(text)
         except Exception as e:
@@ -170,10 +190,13 @@ class VoicePipeline:
         finally:
             with self._tts_lock:
                 self._tts_playing = False
-                self._post_tts_until = time.time() + 1.0
+            # Post-TTS mute: 1.5 s to absorb speaker echo
+            self._post_tts_until = time.time() + 1.5
+
+    # ── Command processing ────────────────────────────────────────────────
 
     def _process_command(self) -> None:
-        """Process the collected command audio."""
+        """Transcribe and dispatch the buffered command audio."""
         if not self._command_audio_buffer:
             return
 
@@ -181,63 +204,56 @@ class VoicePipeline:
         duration = len(audio) / settings.sample_rate
         logger.info("Processing command audio (%.1fs)", duration)
 
-        # Transcribe
         text = whisper_stt.transcribe(audio)
         if not text:
             logger.info("No speech detected in command")
             return
 
-        # Filter known Whisper silence / noise hallucinations
-        hallucinations = {
-            "thank you.", "thank you", "subtitles by", "subtitles", "you",
-            "bye", "bye.", "thank you for watching", "thanks for watching",
-            "subscribe", "chuckles", "sighs", "laughter"
-        }
-        clean_text = text.strip().lower()
-        if not clean_text or clean_text in hallucinations or len(clean_text) < 2:
-            logger.info("Ignored empty or hallucinated speech: '%s'", text)
+        # Filter hallucinations and garbage
+        clean = text.strip().lower()
+        if not clean or clean in _HALLUCINATIONS or len(clean) < 2:
+            logger.info("Ignored hallucinated speech: '%s'", text)
             return
 
         logger.info("Command: '%s'", text)
 
-        # Process with brain
         if self.brain:
-            try:
-                loop = asyncio.new_event_loop()
-                result = loop.run_until_complete(
-                    self.brain.process_utterance(text)
-                )
-                loop.close()
+            # Reuse the TTS loop instead of creating a new event loop per call
+            async def _run_brain():
+                try:
+                    result = await self.brain.process_utterance(text)
+                    response_text = ""
+                    if isinstance(result, dict):
+                        response_text = result.get("response_text", "")
+                        if not response_text:
+                            results = result.get("result", {}).get("results", [])
+                            if isinstance(results, list) and results:
+                                last = results[-1]
+                                if isinstance(last, dict):
+                                    response_text = last.get("result", "")
+                        if not response_text:
+                            response_text = str(result.get("result", ""))
+                    if response_text and response_text.strip():
+                        await self._speak_with_mute(response_text.strip())
+                except Exception as exc:
+                    logger.error("Brain processing error: %s", exc)
 
-                # Extract response text from brain result
-                response_text = ""
-                if isinstance(result, dict):
-                    response_text = result.get("response_text", "")
-                    if not response_text and "results" in result:
-                        results = result["results"]
-                        if isinstance(results, list) and len(results) > 0:
-                            first = results[0]
-                            if isinstance(first, dict):
-                                response_text = first.get("response_text", first.get("result", ""))
-                    if not response_text:
-                        response_text = result.get("result", "")
-                
-                if response_text:
-                    self._speak_async(response_text)
-            except Exception as e:
-                logger.error("Brain processing error: %s", e)
+            loop = self._tts_loop
+            if loop and loop.is_running():
+                with self._tts_lock:
+                    self._tts_playing = True
+                asyncio.run_coroutine_threadsafe(_run_brain(), loop)
+
+    # ── Shutdown ──────────────────────────────────────────────────────────
 
     def stop(self) -> None:
-        """Stop the voice pipeline."""
+        """Stop the voice pipeline gracefully."""
         self._running = False
         microphone.stop()
         if self._thread:
             self._thread.join(timeout=3.0)
-        
-        # Stop TTS event loop
         if self._tts_loop and self._tts_loop.is_running():
             self._tts_loop.call_soon_threadsafe(self._tts_loop.stop)
         if self._tts_thread:
             self._tts_thread.join(timeout=2.0)
-        
         logger.info("Voice pipeline stopped")

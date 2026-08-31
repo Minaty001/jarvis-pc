@@ -96,6 +96,16 @@ async def _bootstrap_engine():
                 category=ToolCategory.COMPUTER, risk_level=RiskLevel.LOW,
                 handler=media_control.set_volume,
                 parameters={"level": {"type": "string", "required": True}}),
+        ToolDef(name="play_on_youtube",
+                description="Search and play a song or video on YouTube in the browser",
+                category=ToolCategory.NETWORK, risk_level=RiskLevel.LOW,
+                handler=media_control.play_on_youtube,
+                parameters={"query": {"type": "string", "required": True}}),
+        ToolDef(name="play_on_spotify",
+                description="Search and play a song on Spotify",
+                category=ToolCategory.NETWORK, risk_level=RiskLevel.LOW,
+                handler=media_control.play_on_spotify,
+                parameters={"query": {"type": "string", "required": True}}),
         ToolDef(name="run_command", description="Execute a shell command",
                 category=ToolCategory.SYSTEM, risk_level=RiskLevel.HIGH,
                 handler=shell_exec.run_command, requires_confirmation=True,
@@ -108,6 +118,7 @@ async def _bootstrap_engine():
     for t in _builtin_tools:
         tool_registry.register(t)
     logger.info("Registered %d builtin tools", len(_builtin_tools))
+
 
     # Check hardware permissions (mic, speaker, camera)
     from voice.permissions import permission_manager

@@ -191,25 +191,22 @@ class CognitiveOrchestrator:
         if resolved.confidence >= 0.9 and resolved.action != "chat":
             # Map intent actions to registered tool names
             tool_name = resolved.action
-            if tool_name == "open_app":
-                tool_name = "open_app"
-            elif tool_name == "close_app":
-                tool_name = "close_app"
-            elif tool_name == "media_play":
-                tool_name = "media_play"
-            elif tool_name == "media_pause":
-                tool_name = "media_pause"
-            elif tool_name == "set_volume":
-                tool_name = "set_volume"
-            elif tool_name == "web_search":
-                tool_name = "web_search"
+            if tool_name in (
+                "open_app", "close_app",
+                "media_play", "media_pause", "set_volume",
+                "play_on_youtube", "play_on_spotify",
+                "web_search",
+            ):
+                pass  # name already matches registered tool
             elif tool_name == "shell_exec":
                 tool_name = "run_command"
-            elif tool_name in ("screenshot", "clipboard_copy", "clipboard_paste",
-                               "get_time", "get_date", "get_battery", "get_cpu",
-                               "get_memory", "get_disk", "get_network",
-                               "list_files", "create_file", "delete_file"):
-                tool_name = resolved.action
+            elif tool_name in (
+                "screenshot", "clipboard_copy", "clipboard_paste",
+                "get_time", "get_date", "get_battery", "get_cpu",
+                "get_memory", "get_disk", "get_network",
+                "list_files", "create_file", "delete_file",
+            ):
+                pass  # system tools — pass through
             else:
                 tool_name = None
 

@@ -132,8 +132,17 @@ class WakeWordDetector:
         """
         Run full 3-stage detection pipeline.
         Returns (is_wake_word, confidence_score).
+
+        Pre-check: skip ONNX inference entirely if audio energy is below
+        the minimum speech floor (0.008 RMS for float32). This prevents
+        the classifier from firing score=1.000 on near-silence buffers.
         """
         if not self._loaded:
+            return False, 0.0
+
+        # Fast pre-filter: don't run ONNX on silent audio
+        rms = float(np.sqrt(np.mean(audio.astype(np.float32) ** 2)))
+        if rms < 0.008:
             return False, 0.0
 
         try:
@@ -147,8 +156,8 @@ class WakeWordDetector:
             self._consecutive_errors += 1
             # Rate-limit error logging to prevent log spam
             if self._consecutive_errors % self._error_log_interval == 1:
-                logger.warning("Wake word detection error (consecutive %d): %s", 
-                             self._consecutive_errors, e)
+                logger.warning("Wake word detection error (consecutive %d): %s",
+                               self._consecutive_errors, e)
             return False, 0.0
 
     @property
