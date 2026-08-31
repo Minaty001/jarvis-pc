@@ -497,6 +497,11 @@ class JarvisAPIHandler(BaseHTTPRequestHandler):
         logger.debug("API: %s", format % args)
 
 
+class _ReusableHTTPServer(HTTPServer):
+    """HTTPServer with SO_REUSEADDR to avoid 'Address already in use' on restart."""
+    allow_reuse_address = True
+
+
 class JarvisAPI:
     """HTTP API server for the cognitive engine with Web UI."""
 
@@ -509,7 +514,7 @@ class JarvisAPI:
 
     def start(self, engine: Any, blocking: bool = False) -> None:
         JarvisAPIHandler.engine = engine
-        self._server = HTTPServer((self.host, self.port), JarvisAPIHandler)
+        self._server = _ReusableHTTPServer((self.host, self.port), JarvisAPIHandler)
         logger.info("API server listening on http://%s:%d", self.host, self.port)
         if blocking:
             self._server.serve_forever()
