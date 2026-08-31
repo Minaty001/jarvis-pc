@@ -8,7 +8,7 @@ from typing import Any
 
 from config.logger import get_logger
 from agents.base import AgentResult, BaseAgent
-from core.brain import jarvis_brain
+from cognitive.orchestrator import cognitive_orchestrator
 
 logger = get_logger("agents.task")
 
@@ -28,7 +28,7 @@ class TaskAgent(BaseAgent):
         context = self.goal
         for step in range(self.max_steps):
             self.steps_taken = step + 1
-            result = await jarvis_brain.process_utterance(
+            result = await cognitive_orchestrator.process_goal(
                 context,
                 session_id=f"task-{self.id}",
             )

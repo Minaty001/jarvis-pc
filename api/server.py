@@ -471,9 +471,11 @@ class JarvisAPIHandler(BaseHTTPRequestHandler):
 
     def _json_response(self, code: int, data: dict):
         body = json.dumps(data, indent=2, default=str).encode()
+        origin = self.headers.get("Origin", "")
+        allowed_origin = origin if origin in ("http://localhost:3000", "http://127.0.0.1:3000") else "http://127.0.0.1:3000"
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", allowed_origin)
         self.send_header("Content-Length", len(body))
         self.end_headers()
         self.wfile.write(body)
@@ -497,7 +499,7 @@ class JarvisAPI:
 
     def __init__(self, host: Optional[str] = None, port: Optional[int] = None):
         import os
-        self.host = host or os.environ.get("HOST", "0.0.0.0")
+        self.host = host or os.environ.get("HOST", "127.0.0.1")
         self.port = port or int(os.environ.get("PORT", "3000"))
         self._server: Optional[HTTPServer] = None
         self._thread: Optional[Thread] = None

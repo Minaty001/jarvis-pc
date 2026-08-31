@@ -286,8 +286,9 @@ class CognitiveOrchestrator:
         }
 
     def _extract_json_plan(self, text: str, goal: str) -> Optional[dict]:
-        """Extract JSON plan from LLM response text."""
+        """Extract and validate JSON plan using Pydantic plan_validator."""
         import re
+        from planning.plan_validator import plan_validator
         # Try to find JSON array in response
         json_match = re.search(r'\[.*\]', text, re.DOTALL)
         if json_match:
@@ -303,12 +304,16 @@ class CognitiveOrchestrator:
                             "tool": step.get("tool"),
                             "parameters": step.get("parameters", {}),
                             "dependencies": step.get("dependencies", []),
-                            "risk_level": step.get("risk_level", 0),
-                            "status": "pending",
+                            "risk_level": 0,
                         })
-                    return {"goal": goal, "steps": normalized}
-            except json.JSONDecodeError:
-                pass
+                    raw = {"goal": goal, "steps": normalized}
+                    valid, validated, reason = plan_validator.validate(raw)
+                    if valid and validated:
+                        return validated.model_dump()
+                    else:
+                        logger.warning("Extracted plan failed validation: %s", reason)
+            except Exception as e:
+                logger.debug("JSON plan parsing error: %s", e)
         return None
 
     async def _execute_plan(self, plan: dict, task_id: str) -> dict:
@@ -372,16 +377,16 @@ class CognitiveOrchestrator:
 
         world_state.add_recent_action({"step": step_id, "description": description})
 
-        # Policy check
-        if self._permission_engine and risk_level >= 3:
-            approved = await self._permission_engine.request_approval(
-                action=tool or "reason",
-                target=description,
-                risk_level=risk_level,
-                reason=f"Plan step: {description}",
-            )
-            if not approved:
-                return {"status": "blocked", "reason": "approval denied"}
+        # Policy check: evaluate deterministic SecurityPolicy (never trust model risk_level)
+        if tool and self._tool_executor:
+            from tools.registry import tool_registry
+            from tools.security import security_policy
+            tool_def = tool_registry.get(tool)
+            if tool_def:
+                allowed, reason, _ = security_policy.evaluate(tool_def, params)
+                if not allowed:
+                    logger.warning("Step %s blocked by security_policy: %s", step_id, reason)
+                    return {"status": "blocked", "reason": reason}
 
         # Execute: either tool call or LLM reasoning
         if tool and self._tool_executor:

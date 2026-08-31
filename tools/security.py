@@ -45,20 +45,28 @@ class SecurityPolicy:
                 self._audit("blocked_pattern", tool.name, args, pattern)
                 return False, f"Blocked dangerous pattern: {pattern}", ""
 
+        # Deterministic Risk Determination from Tool & Arguments (never trust model risk)
+        command_str = str(args.get("command", "")).lower()
+        if tool.name == "run_command":
+            if any(danger in command_str for danger in ("rm ", "mkfs", "dd ", "chmod ", "chown ", "sudo ", "pkill -f")):
+                risk = RiskLevel.CRITICAL
+            else:
+                risk = RiskLevel.HIGH
+
         # Risk-based checks
         if risk == RiskLevel.CRITICAL:
-            if self.strict_mode:
-                self._audit("critical_blocked", tool.name, args)
-                return False, "Critical risk tools require strict mode to be off", ""
-            return True, "Critical risk (strict mode off)", ""
+            if user_context and user_context.get("confirmed", False):
+                self._audit("critical_confirmed", tool.name, args)
+                return True, "Critical risk confirmed by user", ""
+            self._audit("critical_requires_confirmation", tool.name, args)
+            return False, "Critical risk tool requires explicit user confirmation", ""
 
         if risk == RiskLevel.HIGH:
-            if not tool.requires_confirmation:
-                self._audit("high_risk_no_confirm", tool.name, args)
-                return False, "High risk tools require confirmation", ""
+            if tool.requires_confirmation and not (user_context and user_context.get("confirmed", False)):
+                self._audit("high_risk_pending_confirmation", tool.name, args)
+                return False, "High risk tool requires user confirmation", ""
 
         if risk == RiskLevel.MEDIUM and tool.requires_permission:
-            # In a real system, check user permission grants
             pass
 
         # Command-specific checks for system tools
