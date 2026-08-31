@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     openrouter_model: str = "openrouter/free"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
+    # === Remote Backend API ===
+    jarvis_api_url: str = Field(default="https://jarvis-pc-7e8k.onrender.com", alias="JARVIS_API_URL")
+
     # === Voice Settings ===
     jarvis_voice: str = Field(default="en-US-GuyNeural", alias="JARVIS_VOICE")
     jarvis_rate: str = "+0%"

@@ -167,9 +167,30 @@ class UIBridge:
             self._idle(self.on_orb_state, "thinking")
 
         if not self.orchestrator:
-            if self.on_chat:
-                self._idle(self.on_chat, "jarvis",
-                           "Engine not connected. (Headless mode)")
+            async def _run_remote():
+                import httpx
+                from config.settings import settings
+                url = f"{settings.jarvis_api_url.rstrip('/')}/chat"
+                try:
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        resp = await client.post(url, json={"message": text})
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            reply = data.get("response_text") or data.get("result") or str(data)
+                            if self.on_chat:
+                                self._idle(self.on_chat, "jarvis", reply)
+                        else:
+                            if self.on_chat:
+                                self._idle(self.on_chat, "jarvis", f"Render API ({resp.status_code}): {resp.text}")
+                except Exception as e:
+                    logger.error("Render API call failed: %s", e)
+                    if self.on_chat:
+                        self._idle(self.on_chat, "jarvis", f"Render API error: {e}")
+                finally:
+                    if self.on_orb_state:
+                        self._idle(self.on_orb_state, "idle")
+
+            asyncio.run_coroutine_threadsafe(_run_remote(), self._loop)
             return
 
         async def _run():
