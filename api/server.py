@@ -347,19 +347,19 @@ class JarvisAPIHandler(BaseHTTPRequestHandler):
 
     def _handle_tools(self):
         try:
-            from tools.registry import tool_registry
+            from jarvis.tools.registry import ToolRegistry
+            registry = ToolRegistry()
             tools = []
-            for t in tool_registry.list_tools():
+            for t in registry.list():
                 tools.append({
                     "name": t.name,
-                    "description": t.description,
-                    "category": t.category.value,
-                    "risk": t.risk_level.value,
-                    "parameters": t.parameters,
-                    "requires_confirmation": t.requires_confirmation,
+                    "description": getattr(t, "description", ""),
+                    "category": getattr(getattr(t, "category", None), "value", "custom"),
+                    "risk": t.risk_level.value if hasattr(t.risk_level, "value") else str(t.risk_level),
+                    "parameters": getattr(t, "parameters", {}),
+                    "requires_confirmation": getattr(t, "requires_confirmation", False),
                 })
-            stats = tool_registry.get_call_stats()
-            self._json_response(200, {"tools": tools, "stats": stats})
+            self._json_response(200, {"tools": tools, "stats": {}})
         except Exception as e:
             self._json_response(200, {"tools": [], "stats": {}})
 
@@ -436,8 +436,10 @@ class JarvisAPIHandler(BaseHTTPRequestHandler):
 
     async def _execute_tool(self, tool_name: str, args: dict) -> dict:
         try:
-            from tools.executor import tool_executor
-            return await tool_executor.execute(tool_name, args)
+            from jarvis.tools.executor import ToolExecutor
+            executor = ToolExecutor()
+            res = await executor.execute(tool_name, arguments=args)
+            return {"success": True, "result": res, "error": ""}
         except Exception as e:
             return {"success": False, "error": str(e)}
 

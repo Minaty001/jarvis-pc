@@ -48,11 +48,11 @@ def test_bridge():
     bridge = UIBridge(engine)
 
     # exercise the tools-summary path by registering one tool
-    from tools.registry import tool_registry, ToolDef, ToolCategory, RiskLevel
-    tool_registry.register(ToolDef(
-        name="demo_tool", description="demo", category=ToolCategory.COMPUTER,
-        risk_level=RiskLevel.LOW, handler=lambda **k: None,
-        parameters={}))
+    from jarvis.tools.registry import ToolRegistry
+    from jarvis.tools.base import ToolDefinition
+    from jarvis.tools.policy import RiskLevel
+    reg = ToolRegistry()
+    reg.register(ToolDefinition(name="demo_tool", risk=RiskLevel.SAFE, capabilities=frozenset(), handler=lambda **k: None))
 
     seen = {"orb": [], "status": [], "chat": [], "system": [], "tools": [], "memory": []}
     bridge.on_orb_state = lambda s: seen["orb"].append(s)

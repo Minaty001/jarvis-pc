@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import sys
 from typing import Sequence
 
+from jarvis.app.application import Application
 from jarvis.cli.doctor import run_doctor
 
 
-def run_cli(args: Sequence[str] | None = None) -> int:
+def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -> int:
     """Run JARVIS CLI with given arguments."""
     if args is None:
         args = sys.argv[1:]
@@ -23,6 +25,7 @@ def run_cli(args: Sequence[str] | None = None) -> int:
     subparsers.add_parser("doctor", help="Run system diagnostics check")
     subparsers.add_parser("status", help="Check JARVIS service status")
     subparsers.add_parser("version", help="Show JARVIS version")
+    subparsers.add_parser("help", help="Show help message")
 
     parsed_args = parser.parse_args(args)
 
@@ -32,8 +35,20 @@ def run_cli(args: Sequence[str] | None = None) -> int:
         print("JARVIS CLI v1.0.0 (Linux)")
     elif parsed_args.subcommand == "status":
         print("JARVIS Status: operational")
+    elif parsed_args.subcommand == "help":
+        parser.print_help()
     elif parsed_args.subcommand == "run":
         print("Starting JARVIS v1.0.0...")
+        application = app if app is not None else Application()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            loop.create_task(application.start())
+        else:
+            asyncio.run(application.start())
     else:
         print("JARVIS CLI v1.0.0 (Linux)")
 

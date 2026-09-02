@@ -7,9 +7,10 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from config.logger import get_logger
-from tools.registry import tool_registry
+from jarvis.tools.registry import ToolRegistry
 
 logger = get_logger("planning.validator")
+_validator_registry = ToolRegistry()
 
 
 class ValidatedPlanStep(BaseModel):
@@ -23,7 +24,7 @@ class ValidatedPlanStep(BaseModel):
     @field_validator("tool")
     def check_tool_exists(cls, v):
         if v is not None:
-            tool_def = tool_registry.get(v)
+            tool_def = _validator_registry.get(v)
             if tool_def is None and v not in ("chat", "reason"):
                 logger.warning("Plan step specifies unregistered tool: %s", v)
         return v

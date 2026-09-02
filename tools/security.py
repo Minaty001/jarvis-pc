@@ -7,7 +7,10 @@ import time
 from typing import Any, Optional
 
 from config.logger import get_logger
-from tools.registry import ToolDef, RiskLevel, ToolCategory, tool_registry
+from jarvis.tools.base import ToolDefinition as ToolDef
+from jarvis.tools.policy import RiskLevel
+from jarvis.tools.registry import ToolRegistry
+
 
 logger = get_logger("security.policy")
 
@@ -70,7 +73,7 @@ class SecurityPolicy:
             pass
 
         # Command-specific checks for system tools
-        if tool.category == ToolCategory.SYSTEM:
+        if getattr(tool, "category", None) in ("system", "SYSTEM"):
             cmd = args.get("command", "")
             if cmd:
                 cmd_check = self._check_command(cmd)

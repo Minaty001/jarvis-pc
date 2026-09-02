@@ -249,8 +249,9 @@ class UIBridge:
     # ── summaries ───────────────────────────────────────────────────────
     def _tools_summary(self) -> str:
         try:
-            from tools.registry import tool_registry
-            tools = tool_registry.list_tools()
+            from jarvis.tools.registry import ToolRegistry
+            registry = ToolRegistry()
+            tools = registry.list()
             names = [t.name for t in tools]
             if not names:
                 return ""

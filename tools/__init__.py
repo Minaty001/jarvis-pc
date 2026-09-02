@@ -1,6 +1,6 @@
 """Jarvis Tools System."""
 
-from tools.registry import tool_registry
-from tools.executor import tool_executor
+from jarvis.tools.registry import ToolRegistry
+from jarvis.tools.executor import ToolExecutor
 
-__all__ = ["tool_registry", "tool_executor"]
+__all__ = ["ToolRegistry", "ToolExecutor"]

@@ -263,8 +263,7 @@ class CognitiveOrchestrator:
             try:
                 tools = []
                 if self._tool_executor:
-                    from tools.registry import tool_registry
-                    tools = [t.name for t in tool_registry.list_tools()]
+                    tools = [t.name for t in self._tool_executor.registry.list()]
 
                 planning_prompt = build_planning_prompt(
                     goal=goal,
@@ -395,9 +394,8 @@ class CognitiveOrchestrator:
 
         # Policy check: evaluate deterministic SecurityPolicy (never trust model risk_level)
         if tool and self._tool_executor:
-            from tools.registry import tool_registry
             from tools.security import security_policy
-            tool_def = tool_registry.get(tool)
+            tool_def = self._tool_executor.registry.get(tool)
             if tool_def:
                 allowed, reason, _ = security_policy.evaluate(tool_def, params)
                 if not allowed:

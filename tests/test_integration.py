@@ -89,7 +89,9 @@ def test_event_bus():
 
 def test_tool_registry():
     """Test tool registry and security."""
-    from tools.registry import ToolRegistry, ToolDef, ToolCategory, RiskLevel
+    from jarvis.tools.registry import ToolRegistry
+    from jarvis.tools.base import ToolDefinition as ToolDef
+    from jarvis.tools.policy import RiskLevel
     from tools.security import SecurityPolicy
 
     reg = ToolRegistry()
@@ -99,9 +101,8 @@ def test_tool_registry():
 
     tool = ToolDef(
         name="test_tool",
-        description="A test tool",
-        category=ToolCategory.CUSTOM,
-        risk_level=RiskLevel.LOW,
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset(),
         handler=dummy_handler,
     )
     reg.register(tool)
