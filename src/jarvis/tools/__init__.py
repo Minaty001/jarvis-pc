@@ -5,6 +5,11 @@ from jarvis.tools.executor import (
     ToolDenied,
     ConfirmationRequired,
 )
+from jarvis.tools.confirmation import (
+    hash_arguments,
+    create_confirmation_token,
+    verify_confirmation_token,
+)
 
 __all__ = [
     "RiskLevel",
@@ -12,4 +17,8 @@ __all__ = [
     "ToolDefinition",
     "ToolDenied",
     "ConfirmationRequired",
+    "hash_arguments",
+    "create_confirmation_token",
+    "verify_confirmation_token",
 ]
+
