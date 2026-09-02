@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+import tempfile
+
+
 @dataclass(frozen=True)
 class AppPaths:
     config: Path
@@ -31,7 +34,7 @@ def get_app_paths(app_name: str = "jarvis") -> AppPaths:
     if runtime_env:
         runtime_dir = Path(runtime_env) / app_name
     else:
-        runtime_dir = Path("/tmp") / f"{app_name}-{os.getuid()}"
+        runtime_dir = Path(tempfile.gettempdir()) / f"{app_name}-{os.getuid()}"  # nosec B108
 
     return AppPaths(
         config=config_base / app_name,
