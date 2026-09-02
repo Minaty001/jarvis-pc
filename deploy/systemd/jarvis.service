@@ -6,13 +6,11 @@ Wants=network-online.target
 [Service]
 Type=simple
 
-User=%u
-
 WorkingDirectory=%h/.local/share/jarvis
 
 Environment="PYTHONUNBUFFERED=1"
 
-ExecStart=%h/.local/bin/jarvis
+ExecStart=%h/.local/share/jarvis/venv/bin/jarvis run
 
 Restart=on-failure
 RestartSec=5
