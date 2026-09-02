@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from collections import defaultdict
 from typing import Dict, List
@@ -17,6 +18,7 @@ class RateLimiter:
         self.max_calls = max_calls
         self.period_seconds = period_seconds
         self._history: Dict[str, List[float]] = defaultdict(list)
+        self._lock = asyncio.Lock()
 
     def check(self, key: str) -> bool:
         """Check if executing target key exceeds rate limit.
@@ -32,3 +34,8 @@ class RateLimiter:
             )
         self._history[key].append(now)
         return True
+
+    async def check_async(self, key: str) -> bool:
+        """Async variant of check protected by asyncio.Lock."""
+        async with self._lock:
+            return self.check(key)

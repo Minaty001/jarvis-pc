@@ -6,6 +6,8 @@ import signal
 from dataclasses import dataclass
 from typing import Sequence
 
+MAX_OUTPUT_BYTES: int = 10 * 1024 * 1024
+
 
 class ProcessError(RuntimeError):
     pass
@@ -24,6 +26,7 @@ async def run_process(
     cwd: str | os.PathLike[str] | None = None,
     timeout: float = 30.0,
     env: dict[str, str] | None = None,
+    max_output_bytes: int = MAX_OUTPUT_BYTES,
 ) -> ProcessResult:
     if not args:
         raise ValueError("args cannot be empty")
@@ -59,6 +62,12 @@ async def run_process(
             await process.wait()
 
         raise ProcessError(f"process timed out after {timeout}s")
+
+    if len(stdout) > max_output_bytes:
+        stdout = stdout[:max_output_bytes]
+
+    if len(stderr) > max_output_bytes:
+        stderr = stderr[:max_output_bytes]
 
     result = ProcessResult(
         returncode=process.returncode if process.returncode is not None else -1,

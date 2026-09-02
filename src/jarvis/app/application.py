@@ -32,10 +32,23 @@ class Application:
             return
 
         logger.info("Starting JARVIS application")
+        components = [self.scheduler, self.voice, self.api]
+        started_components: list[Any] = []
 
-        for component in (self.scheduler, self.voice, self.api):
-            if component is not None and hasattr(component, "start") and callable(component.start):
-                await component.start()
+        try:
+            for component in components:
+                if component is not None and hasattr(component, "start") and callable(component.start):
+                    await component.start()
+                    started_components.append(component)
+        except Exception:
+            logger.exception("Application startup failed; rolling back started components")
+            for component in reversed(started_components):
+                if hasattr(component, "stop") and callable(component.stop):
+                    try:
+                        await component.stop()
+                    except Exception as stop_exc:
+                        logger.exception("Failed stopping component during rollback: %r", stop_exc)
+            raise
 
         self._started = True
         logger.info("JARVIS started successfully")
