@@ -14,13 +14,20 @@ def test_health_endpoint():
     assert response.json() == {"status": "ok"}
 
 
-def test_execute_endpoint_unknown_tool():
-    response = client.post("/execute", json={"tool": "nonexistent_tool"})
-    assert response.status_code == 400
-    assert "unknown tool" in response.json()["detail"].lower()
+def test_execute_endpoint_unknown_tool(monkeypatch):
+    monkeypatch.setenv("JARVIS_ENVIRONMENT", "development")
+    get_settings.cache_clear()
+    try:
+        response = client.post("/execute", json={"tool": "nonexistent_tool"})
+        assert response.status_code == 400
+        assert "unknown tool" in response.json()["detail"].lower()
+    finally:
+        get_settings.cache_clear()
 
 
-def test_execute_endpoint_success():
+def test_execute_endpoint_success(monkeypatch):
+    monkeypatch.setenv("JARVIS_ENVIRONMENT", "development")
+    get_settings.cache_clear()
     executor = get_tool_executor()
 
     async def sample_tool(param1: str):
@@ -34,14 +41,17 @@ def test_execute_endpoint_success():
         )
     )
 
-    response = client.post(
-        "/execute",
-        json={"tool": "sample_tool", "arguments": {"param1": "hello"}},
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["ok"] is True
-    assert data["result"] == "processed: hello"
+    try:
+        response = client.post(
+            "/execute",
+            json={"tool": "sample_tool", "arguments": {"param1": "hello"}},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ok"] is True
+        assert data["result"] == "processed: hello"
+    finally:
+        get_settings.cache_clear()
 
 
 def test_execute_endpoint_auth_required(monkeypatch):
