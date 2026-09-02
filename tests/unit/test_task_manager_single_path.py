@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 import pytest
 from jarvis.tools.registry import ToolRegistry
 from jarvis.tools.executor import ToolExecutor
@@ -6,6 +10,7 @@ from jarvis.tools.policy import RiskLevel
 from jarvis.tasks.models import TaskPlan, TaskStep
 from jarvis.tasks.manager import TaskManager
 from jarvis.cognitive.context import ExecutionContext
+
 
 
 @pytest.mark.asyncio
@@ -30,3 +35,23 @@ async def test_task_manager_routes_exclusively_through_executor():
     res = await manager.execute_plan(plan, context=ctx)
     assert res["step-1"] == "done-abc"
     assert executed_args == ["abc"]
+
+
+@pytest.mark.asyncio
+async def test_task_engine_default_step_runner_uses_executor(monkeypatch):
+    from task_engine.manager import _default_step_runner
+    from jarvis.tools.executor import ToolExecutor
+
+    executed = []
+
+    async def mock_execute(self, action, context=None, **kwargs):
+        executed.append((action, kwargs))
+        return "executor-success"
+
+    monkeypatch.setattr(ToolExecutor, "execute", mock_execute)
+
+    res = await _default_step_runner("test_action", {"foo": "bar"})
+    assert res.success is True
+    assert res.output == "executor-success"
+    assert executed == [("test_action", {"foo": "bar"})]
+

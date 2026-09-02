@@ -17,22 +17,16 @@ from task_engine.recovery import CrashRecovery, crash_recovery
 logger = get_logger("task_engine.manager")
 
 
-async def _default_step_runner(action: str, params: dict) -> ActionResult:
-    """Default step runner — dispatches to tool_registry."""
+async def _default_step_runner(action: str, params: dict, context=None) -> ActionResult:
+    """Dispatches exclusively through ToolExecutor."""
     try:
-        from tools.registry import tool_registry
-        tool_def = tool_registry.get(action)
-        if tool_def and tool_def.handler:
-            result = await tool_def.handler(**params)
-            if isinstance(result, dict):
-                if result.get("success", False):
-                    return ActionResult.ok(result.get("result", ""))
-                return ActionResult.fail(result.get("result", "unknown error"))
-            return ActionResult.ok(str(result))
-        # Fallback: tool not found
-        return ActionResult.fail(f"Tool '{action}' not found")
+        from jarvis.tools.executor import ToolExecutor
+        executor = ToolExecutor()
+        res = await executor.execute(action, context=context, **params)
+        return ActionResult.ok(str(res))
     except Exception as e:
         return ActionResult.fail(str(e))
+
 
 
 class TaskManager:
