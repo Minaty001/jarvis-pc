@@ -25,6 +25,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+core = []
 voice = [
     "onnxruntime>=1.17.0",
     "faster-whisper>=1.0.0",
@@ -36,9 +37,17 @@ voice = [
 camera = [
     "opencv-python>=4.8.0",
 ]
+desktop = [
+    "PyGObject>=3.46.0",
+    "pystray>=0.19.0",
+    "Pillow>=10.0.0",
+]
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.23.0",
+]
+all = [
+    "jarvis-pc[core,voice,camera,desktop,dev]",
 ]
 
 [project.scripts]
