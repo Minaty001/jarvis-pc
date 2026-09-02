@@ -40,15 +40,7 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     elif parsed_args.subcommand == "run":
         print("Starting JARVIS v1.0.0...")
         application = app if app is not None else Application()
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            loop.create_task(application.start())
-        else:
-            asyncio.run(application.start())
+        asyncio.run(application.run_until_stopped())
     else:
         print("JARVIS CLI v1.0.0 (Linux)")
 

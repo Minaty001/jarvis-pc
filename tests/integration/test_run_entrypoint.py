@@ -14,4 +14,4 @@ def test_run_cli_launches_application():
     mock_app = AsyncMock(spec=Application)
     ret = run_cli(["run"], app=mock_app)
     assert ret == 0
-    mock_app.start.assert_called_once()
+    mock_app.run_until_stopped.assert_called_once()

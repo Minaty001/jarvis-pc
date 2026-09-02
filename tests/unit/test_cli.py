@@ -21,6 +21,10 @@ def test_cli_status_subcommand(capsys):
 
 
 def test_cli_run_subcommand(capsys):
-    run_cli(["run"])
+    from unittest.mock import AsyncMock
+    from jarvis.app.application import Application
+    mock_app = AsyncMock(spec=Application)
+    run_cli(["run"], app=mock_app)
     captured = capsys.readouterr()
     assert "Starting JARVIS" in captured.out
+    mock_app.run_until_stopped.assert_called_once()
