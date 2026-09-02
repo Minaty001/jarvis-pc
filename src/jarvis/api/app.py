@@ -60,8 +60,8 @@ async def execute(
         executor = get_tool_executor()
         result = await executor.execute(
             request.tool,
-            confirmed=request.confirmed,
-            **request.arguments,
+            confirmation_token=request.confirmation_token,
+            arguments=request.arguments,
         )
         return ExecuteResponse(ok=True, result=result)
     except KeyError as exc:

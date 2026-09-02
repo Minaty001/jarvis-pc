@@ -17,6 +17,8 @@ async def test_tool_executor_safe():
     res = await executor.execute("safe_tool", val="123")
     assert res == "result-123"
 
+from jarvis.tools.confirmation import create_confirmation_token
+
 @pytest.mark.asyncio
 async def test_tool_executor_confirm_requires_flag():
     executor = ToolExecutor()
@@ -25,9 +27,10 @@ async def test_tool_executor_confirm_requires_flag():
 
     executor.register(ToolDefinition("confirm_tool", RiskLevel.CONFIRM, confirm_handler))
     with pytest.raises(ConfirmationRequired):
-        await executor.execute("confirm_tool", confirmed=False)
+        await executor.execute("confirm_tool")
 
-    res = await executor.execute("confirm_tool", confirmed=True)
+    token = create_confirmation_token("confirm_tool", None, "", "jarvis-default-secret")
+    res = await executor.execute("confirm_tool", confirmation_token=token)
     assert res == "done"
 
 @pytest.mark.asyncio
