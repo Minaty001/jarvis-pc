@@ -1,0 +1,8 @@
+"""Default configuration constants for JARVIS."""
+
+DEFAULT_ENVIRONMENT: str = "production"
+DEFAULT_HOST: str = "127.0.0.1"
+DEFAULT_PORT: int = 8000
+DEFAULT_LOG_LEVEL: str = "INFO"
+DEFAULT_MAX_REQUEST_BYTES: int = 1_000_000
+DEFAULT_COMMAND_TIMEOUT_SECONDS: float = 30.0
