@@ -108,9 +108,7 @@ class ToolExecutor:
             if asyncio.iscoroutinefunction(tool.handler) or inspect.iscoroutinefunction(tool.handler):
                 res = await tool.handler(*args, **handler_kwargs)
             else:
-                res = tool.handler(*args, **handler_kwargs)
-                if inspect.isawaitable(res):
-                    res = await res
+                res = await asyncio.to_thread(tool.handler, *args, **handler_kwargs)
 
             self.audit_logger.log_execution(
                 request_id=request_id,
