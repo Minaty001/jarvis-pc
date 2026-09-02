@@ -14,6 +14,18 @@ def create_api_app(executor: ToolExecutor) -> FastAPI:
     """Factory: create FastAPI app with injected executor."""
     api = FastAPI(title="JARVIS API", version="1.0.0")
 
+    @api.middleware("http")
+    async def limit_request_body(request: Request, call_next):
+        from jarvis.config.settings import get_settings
+        settings = get_settings()
+        cl = request.headers.get("content-length")
+        if cl and int(cl) > settings.max_request_bytes:
+            return JSONResponse(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                content={"detail": f"Request body exceeds {settings.max_request_bytes} bytes"},
+            )
+        return await call_next(request)
+
     @api.exception_handler(ToolDenied)
     async def tool_denied_handler(request: Request, exc: ToolDenied):
         return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": str(exc)})

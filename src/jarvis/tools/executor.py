@@ -105,7 +105,7 @@ class ToolExecutor:
             ):
                 raise ToolDenied("Invalid, expired, or tampered confirmation token")
 
-        self.rate_limiter.check(target_name)
+        await self.rate_limiter.check_async(target_name)
 
         logger.info(
             "Executing tool=%s risk=%s request_id=%s",
