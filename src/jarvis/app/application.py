@@ -23,7 +23,10 @@ class Application:
         self.settings = settings
         self.registry = ToolRegistry()
         register_all_builtins(self.registry)
-        self.executor = ToolExecutor(registry=self.registry)
+        self.executor = ToolExecutor(
+            registry=self.registry,
+            confirmation_secret=self.settings.confirmation_secret,
+        )
 
         self.voice: Any = None
         self.scheduler: Any = None

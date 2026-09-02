@@ -24,7 +24,7 @@ async def test_tool_executor_safe():
 
 @pytest.mark.asyncio
 async def test_tool_executor_confirm_requires_flag():
-    executor = ToolExecutor()
+    executor = ToolExecutor(confirmation_secret="jarvis-default-secret")
     async def confirm_handler():
         return "done"
 

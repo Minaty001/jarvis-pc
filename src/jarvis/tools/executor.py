@@ -34,10 +34,12 @@ class ToolExecutor:
         registry: Optional[ToolRegistry] = None,
         rate_limiter: Optional[RateLimiter] = None,
         audit_logger: Optional[AuditLogger] = None,
+        confirmation_secret: Optional[str] = None,
     ) -> None:
         self.registry: ToolRegistry = registry if registry is not None else ToolRegistry()
         self.rate_limiter: RateLimiter = rate_limiter if rate_limiter is not None else RateLimiter()
         self.audit_logger: AuditLogger = audit_logger if audit_logger is not None else AuditLogger()
+        self._confirmation_secret: Optional[str] = confirmation_secret
 
     def register(self, tool: ToolDefinition) -> None:
         self.registry.register(tool)
@@ -95,11 +97,13 @@ class ToolExecutor:
                     f"Execution of tool '{target_name}' requires explicit user confirmation."
                 )
             session_id = context.session_id
-            effective_secret = secret or "jarvis-default-secret"
+            confirmation_secret = secret or self._confirmation_secret
+            if not confirmation_secret:
+                raise ToolDenied("Confirmation secret is not configured. Cannot verify confirmation tokens.")
             if not verify_confirmation_token(
-                target_name, verify_args, session_id, effective_secret, confirmation_token
+                target_name, verify_args, session_id, confirmation_secret, confirmation_token
             ):
-                raise ToolDenied("Invalid or tampered confirmation token")
+                raise ToolDenied("Invalid, expired, or tampered confirmation token")
 
         self.rate_limiter.check(target_name)
 

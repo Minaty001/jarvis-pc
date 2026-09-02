@@ -58,7 +58,7 @@ async def test_confirmation_token_invalid_or_tampered():
 
     secret = "secret-key"
     invalid_token = "invalid-token-digest"
-    with pytest.raises(ToolDenied, match="Invalid or tampered confirmation token"):
+    with pytest.raises(ToolDenied, match="Invalid, expired, or tampered confirmation token"):
         await executor.execute("send_msg", context=ctx, confirmation_token=invalid_token, secret=secret, arguments={"to": "alice"})
 
 

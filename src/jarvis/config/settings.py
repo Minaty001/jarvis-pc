@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     port: int = Field(default=DEFAULT_PORT, ge=1, le=65535)
     log_level: str = DEFAULT_LOG_LEVEL
     api_token: str | None = None
+    confirmation_secret: str | None = None
     max_request_bytes: int = Field(default=DEFAULT_MAX_REQUEST_BYTES, ge=1024)
     command_timeout_seconds: float = Field(
         default=DEFAULT_COMMAND_TIMEOUT_SECONDS, gt=0, le=300
