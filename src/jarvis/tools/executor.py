@@ -52,13 +52,16 @@ class ToolExecutor:
         self,
         tool_name: Optional[str] = None,
         *args: Any,
-        context: Optional[ExecutionContext] = None,
+        context: ExecutionContext,
         confirmation_token: Optional[str] = None,
         secret: Optional[str] = None,
         arguments: Optional[Dict[str, Any]] = None,
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
+        if context is None or not isinstance(context, ExecutionContext):
+            raise TypeError("ExecutionContext is mandatory for tool execution.")
+
         target_name = tool_name or name
         if target_name is None and args:
             target_name = args[0]
@@ -74,7 +77,7 @@ class ToolExecutor:
                 f"Execution of tool '{target_name}' is denied due to risk level '{tool.risk.value}'."
             )
 
-        if context and tool.capabilities:
+        if tool.capabilities:
             if not (tool.capabilities <= context.permissions):
                 raise ToolDenied(
                     f"Insufficient capabilities for tool '{target_name}'. Required: {set(tool.capabilities)}, provided: {set(context.permissions)}"
@@ -91,7 +94,7 @@ class ToolExecutor:
                 raise ConfirmationRequired(
                     f"Execution of tool '{target_name}' requires explicit user confirmation."
                 )
-            session_id = context.session_id if context else ""
+            session_id = context.session_id
             effective_secret = secret or "jarvis-default-secret"
             if not verify_confirmation_token(
                 target_name, verify_args, session_id, effective_secret, confirmation_token
@@ -104,7 +107,7 @@ class ToolExecutor:
             "Executing tool=%s risk=%s request_id=%s",
             tool.name,
             tool.risk.value if hasattr(tool.risk, "value") else str(tool.risk),
-            context.request_id if context else "none",
+            context.request_id,
         )
 
         handler_kwargs: Dict[str, Any] = {}
@@ -112,7 +115,7 @@ class ToolExecutor:
             handler_kwargs.update(arguments)
         handler_kwargs.update(clean_kwargs)
 
-        request_id = context.request_id if context else "none"
+        request_id = context.request_id
         risk_str = tool.risk.value if hasattr(tool.risk, "value") else str(tool.risk)
 
         try:

@@ -26,6 +26,8 @@ async def test_sync_handler_wrapped_in_thread():
     )
     executor = ToolExecutor(registry)
 
-    res = await executor.execute("sync_tool", duration=0.01)
+    from jarvis.cognitive.context import ExecutionContext
+    ctx = ExecutionContext("s1", "t1", "u1", "r1")
+    res = await executor.execute("sync_tool", context=ctx, duration=0.01)
     assert res == "sync_done"
     assert executed_thread is not main_thread

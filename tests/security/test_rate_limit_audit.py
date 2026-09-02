@@ -64,11 +64,12 @@ async def test_tool_executor_enforces_rate_limit():
 
     executor.register(ToolDefinition("test_tool", RiskLevel.SAFE, dummy_handler))
 
-    res = await executor.execute("test_tool")
+    ctx = ExecutionContext(session_id="s1", task_id="t1", user_id="u1", request_id="r1")
+    res = await executor.execute("test_tool", context=ctx)
     assert res == "ok"
 
     with pytest.raises(RateLimitExceeded):
-        await executor.execute("test_tool")
+        await executor.execute("test_tool", context=ctx)
 
 
 @pytest.mark.asyncio

@@ -23,7 +23,9 @@ async def test_task_manager_executes_plan_via_executor():
         ]
     )
 
-    results = await manager.execute_plan(plan)
+    from jarvis.cognitive.context import ExecutionContext
+    ctx = ExecutionContext("s1", "t1", "u1", "r1")
+    results = await manager.execute_plan(plan, context=ctx)
     assert results["step-1"] == "success"
     assert executed_args == ["file.txt"]
     assert plan.steps[0].status == StepStatus.COMPLETED
@@ -46,7 +48,9 @@ async def test_task_manager_handles_step_failure():
         ]
     )
 
-    results = await manager.execute_plan(plan)
+    from jarvis.cognitive.context import ExecutionContext
+    ctx = ExecutionContext("s1", "t1", "u1", "r1")
+    results = await manager.execute_plan(plan, context=ctx)
     assert "step-fail" not in results
     assert plan.steps[0].status == StepStatus.FAILED
     assert "Something went wrong" in plan.steps[0].error

@@ -17,7 +17,7 @@ class TaskManager:
     async def execute_step(
         self,
         step: TaskStep,
-        context: Optional[ExecutionContext] = None,
+        context: ExecutionContext,
         confirmed: bool = False,
     ) -> Any:
         """Executes a single task step via the ToolExecutor single execution gate."""
@@ -36,7 +36,7 @@ class TaskManager:
     async def execute_plan(
         self,
         plan: TaskPlan,
-        context: Optional[ExecutionContext] = None,
+        context: ExecutionContext,
         confirmed: bool = False,
     ) -> Dict[str, Any]:
         """Executes all steps in a TaskPlan sequentially."""

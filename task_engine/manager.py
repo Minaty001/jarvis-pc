@@ -37,8 +37,16 @@ class TaskManager:
         """Dispatches through the injected ToolExecutor."""
         if self._tool_executor is None:
             return ActionResult.fail("No ToolExecutor configured")
+        from jarvis.cognitive.context import ExecutionContext
+        ctx = context or ExecutionContext(
+            session_id="task-engine",
+            task_id="task-step",
+            user_id="system",
+            request_id="task-engine-req",
+            permissions=frozenset({"filesystem.read", "filesystem.write", "desktop.applications", "system.read", "media.camera"}),
+        )
         try:
-            res = await self._tool_executor.execute(action, context=context, arguments=params)
+            res = await self._tool_executor.execute(action, context=ctx, arguments=params)
             return ActionResult.ok(str(res))
         except Exception as e:
             return ActionResult.fail(str(e))
