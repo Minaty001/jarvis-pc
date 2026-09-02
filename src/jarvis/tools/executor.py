@@ -6,8 +6,10 @@ import logging
 from typing import Any, Callable, Dict, Optional
 
 from jarvis.cognitive.context import ExecutionContext
+from jarvis.tools.audit import AuditLogger
 from jarvis.tools.base import ToolDefinition
 from jarvis.tools.policy import RiskLevel
+from jarvis.tools.rate_limit import RateLimiter
 from jarvis.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -24,10 +26,17 @@ class ConfirmationRequired(Exception):
 
 
 class ToolExecutor:
-    """Single execution gate for all tools in the system enforcing risk policies."""
+    """Single execution gate for all tools in the system enforcing risk policies, rate limits, and audit logging."""
 
-    def __init__(self, registry: Optional[ToolRegistry] = None) -> None:
+    def __init__(
+        self,
+        registry: Optional[ToolRegistry] = None,
+        rate_limiter: Optional[RateLimiter] = None,
+        audit_logger: Optional[AuditLogger] = None,
+    ) -> None:
         self.registry: ToolRegistry = registry if registry is not None else ToolRegistry()
+        self.rate_limiter: RateLimiter = rate_limiter if rate_limiter is not None else RateLimiter()
+        self.audit_logger: AuditLogger = audit_logger if audit_logger is not None else AuditLogger()
 
     def register(self, tool: ToolDefinition) -> None:
         self.registry.register(tool)
@@ -68,6 +77,8 @@ class ToolExecutor:
                 f"Execution of tool '{target_name}' requires explicit user confirmation."
             )
 
+        self.rate_limiter.check(target_name)
+
         logger.info(
             "Executing tool=%s risk=%s request_id=%s",
             tool.name,
@@ -80,6 +91,9 @@ class ToolExecutor:
             handler_kwargs.update(arguments)
         handler_kwargs.update(kwargs)
 
+        request_id = context.request_id if context else "none"
+        risk_str = tool.risk.value if hasattr(tool.risk, "value") else str(tool.risk)
+
         try:
             sig = inspect.signature(tool.handler)
             has_var_kw = any(
@@ -90,10 +104,28 @@ class ToolExecutor:
         except (ValueError, TypeError):
             pass
 
-        if asyncio.iscoroutinefunction(tool.handler) or inspect.iscoroutinefunction(tool.handler):
-            return await tool.handler(*args, **handler_kwargs)
+        try:
+            if asyncio.iscoroutinefunction(tool.handler) or inspect.iscoroutinefunction(tool.handler):
+                res = await tool.handler(*args, **handler_kwargs)
+            else:
+                res = tool.handler(*args, **handler_kwargs)
+                if inspect.isawaitable(res):
+                    res = await res
 
-        res = tool.handler(*args, **handler_kwargs)
-        if inspect.isawaitable(res):
-            return await res
-        return res
+            self.audit_logger.log_execution(
+                request_id=request_id,
+                tool_name=tool.name,
+                risk=risk_str,
+                status="success",
+                arguments=handler_kwargs,
+            )
+            return res
+        except Exception as exc:
+            self.audit_logger.log_execution(
+                request_id=request_id,
+                tool_name=tool.name,
+                risk=risk_str,
+                status="failed",
+                arguments=handler_kwargs,
+            )
+            raise
