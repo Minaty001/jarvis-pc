@@ -4,7 +4,6 @@ Auto-requests camera permission on Linux via V4L2.
 
 import os
 import time
-import subprocess
 import glob
 from pathlib import Path
 from typing import Any
@@ -33,18 +32,6 @@ def _ensure_camera_permission() -> bool:
     if os.access(video_devices[0], os.R_OK | os.W_OK):
         logger.info("Camera permission granted: %s", video_devices[0])
         return True
-
-    # Try adding user to video group
-    try:
-        username = os.getenv("USER")
-        if username:
-            subprocess.run(
-                ["sudo", "usermod", "-aG", "video", username],
-                capture_output=True, timeout=5,
-            )
-            logger.info("Added user '%s' to video group (re-login may be needed)", username)
-    except Exception:
-        pass
 
     # Fallback: check if we can still open with OpenCV
     if HAS_CV2:
