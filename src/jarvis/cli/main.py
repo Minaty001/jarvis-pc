@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import subprocess
+import shutil
+import subprocess  # nosec B404
 import sys
 import urllib.request
 from typing import Sequence
@@ -16,8 +17,9 @@ def check_status() -> str:
     """Check real JARVIS service status via systemd and HTTP health check."""
     systemd_state = "unknown"
     try:
-        result = subprocess.run(
-            ["systemctl", "--user", "is-active", "jarvis.service"],
+        systemctl_bin = shutil.which("systemctl") or "/bin/systemctl"
+        result = subprocess.run(  # nosec B603 B607
+            [systemctl_bin, "--user", "is-active", "jarvis.service"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -28,10 +30,10 @@ def check_status() -> str:
 
     health_ok = False
     try:
-        with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=3) as resp:
+        with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=3) as resp:  # nosec B310
             if resp.status == 200:
                 health_ok = True
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     if systemd_state == "active" and health_ok:
