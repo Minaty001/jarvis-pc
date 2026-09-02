@@ -42,7 +42,7 @@ dev = [
 ]
 
 [project.scripts]
-jarvis = "jarvis.__main__:main"
+jarvis = "jarvis.cli.main:run_cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]

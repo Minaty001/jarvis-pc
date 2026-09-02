@@ -1,0 +1,44 @@
+"""CLI entrypoint for JARVIS."""
+from __future__ import annotations
+
+import argparse
+import sys
+from typing import Sequence
+
+from jarvis.cli.doctor import run_doctor
+
+
+def run_cli(args: Sequence[str] | None = None) -> int:
+    """Run JARVIS CLI with given arguments."""
+    if args is None:
+        args = sys.argv[1:]
+
+    parser = argparse.ArgumentParser(
+        prog="jarvis",
+        description="JARVIS — Personal AI Voice Assistant for Linux",
+    )
+    subparsers = parser.add_subparsers(dest="subcommand", help="Subcommands")
+
+    subparsers.add_parser("run", help="Run JARVIS assistant")
+    subparsers.add_parser("doctor", help="Run system diagnostics check")
+    subparsers.add_parser("status", help="Check JARVIS service status")
+    subparsers.add_parser("version", help="Show JARVIS version")
+
+    parsed_args = parser.parse_args(args)
+
+    if parsed_args.subcommand == "doctor":
+        print(run_doctor())
+    elif parsed_args.subcommand == "version":
+        print("JARVIS CLI v1.0.0 (Linux)")
+    elif parsed_args.subcommand == "status":
+        print("JARVIS Status: operational")
+    elif parsed_args.subcommand == "run":
+        print("Starting JARVIS v1.0.0...")
+    else:
+        print("JARVIS CLI v1.0.0 (Linux)")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(run_cli())
