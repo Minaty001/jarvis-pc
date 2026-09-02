@@ -1,8 +1,8 @@
 import asyncio
 import inspect
-from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
+from jarvis.tools.base import ToolDefinition
 from jarvis.tools.policy import RiskLevel
 
 
@@ -14,14 +14,6 @@ class ToolDenied(Exception):
 class ConfirmationRequired(Exception):
     """Raised when execution of a tool requires explicit user confirmation."""
     pass
-
-
-@dataclass
-class ToolDefinition:
-    name: str
-    risk_level: RiskLevel
-    handler: Callable[..., Any]
-    description: str = ""
 
 
 class ToolExecutor:
