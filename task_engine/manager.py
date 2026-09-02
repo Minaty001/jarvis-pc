@@ -2,7 +2,7 @@
 """Task Manager — Single canonical entry point for all task creation and control."""
 from __future__ import annotations
 import asyncio, time
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from config.logger import get_logger
 from task_engine.models import (
     Task, TaskState, TaskStep, Schedule, TaskPriority, StepState, ActionResult
@@ -14,25 +14,17 @@ from task_engine.nl_parser import NLScheduleParser, nl_parser
 from task_engine.approval import ApprovalEngine, approval_engine
 from task_engine.recovery import CrashRecovery, crash_recovery
 
+if TYPE_CHECKING:
+    from jarvis.tools.executor import ToolExecutor
+
 logger = get_logger("task_engine.manager")
-
-
-async def _default_step_runner(action: str, params: dict, context=None) -> ActionResult:
-    """Dispatches exclusively through ToolExecutor."""
-    try:
-        from jarvis.tools.executor import ToolExecutor
-        executor = ToolExecutor()
-        res = await executor.execute(action, context=context, **params)
-        return ActionResult.ok(str(res))
-    except Exception as e:
-        return ActionResult.fail(str(e))
-
 
 
 class TaskManager:
     """Single canonical entry point for all task submission, scheduling, and control."""
 
-    def __init__(self):
+    def __init__(self, tool_executor: ToolExecutor | None = None):
+        self._tool_executor = tool_executor
         self._repo: TaskRepository = task_repository
         self._scheduler: DurableScheduler = durable_scheduler
         self._nl_parser: NLScheduleParser = nl_parser
@@ -40,6 +32,16 @@ class TaskManager:
         self._recovery: CrashRecovery = crash_recovery
         self._running_tasks: dict[str, asyncio.Task] = {}
         self._notify_cb = None  # set by UI/voice bridge
+
+    async def _step_runner(self, action: str, params: dict, context=None) -> ActionResult:
+        """Dispatches through the injected ToolExecutor."""
+        if self._tool_executor is None:
+            return ActionResult.fail("No ToolExecutor configured")
+        try:
+            res = await self._tool_executor.execute(action, context=context, arguments=params)
+            return ActionResult.ok(str(res))
+        except Exception as e:
+            return ActionResult.fail(str(e))
 
     def set_notify_callback(self, cb) -> None:
         """Set a callback for approval/notification messages (called with dict)."""
@@ -139,7 +141,7 @@ class TaskManager:
             task.transition(TaskState.RUNNING)
             await self._repo.update_task(task)
 
-        executor = DAGExecutor(step_runner=_default_step_runner, max_parallel=task.policy.max_parallel_steps)
+        executor = DAGExecutor(step_runner=self._step_runner, max_parallel=task.policy.max_parallel_steps)
         start = time.time()
         summary = await executor.execute(task, self._repo)
         duration = time.time() - start
@@ -255,6 +257,3 @@ class TaskManager:
             )
             steps.append(step)
         return steps
-
-
-task_manager = TaskManager()

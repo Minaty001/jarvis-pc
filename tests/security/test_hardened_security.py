@@ -49,7 +49,9 @@ async def test_application_startup_rollback():
     comp2.start = AsyncMock(side_effect=RuntimeError("Startup error in comp2"))
     comp2.stop = AsyncMock()
 
-    app = Application(scheduler=comp1, voice=comp2)
+    app = Application()
+    app.scheduler = comp1
+    app.voice = comp2
     with pytest.raises(RuntimeError, match="Startup error in comp2"):
         await app.start()
 

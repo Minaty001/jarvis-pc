@@ -38,8 +38,8 @@ async def test_task_manager_routes_exclusively_through_executor():
 
 
 @pytest.mark.asyncio
-async def test_task_engine_default_step_runner_uses_executor(monkeypatch):
-    from task_engine.manager import _default_step_runner
+async def test_task_engine_step_runner_uses_executor(monkeypatch):
+    from task_engine.manager import TaskManager
     from jarvis.tools.executor import ToolExecutor
 
     executed = []
@@ -50,8 +50,11 @@ async def test_task_engine_default_step_runner_uses_executor(monkeypatch):
 
     monkeypatch.setattr(ToolExecutor, "execute", mock_execute)
 
-    res = await _default_step_runner("test_action", {"foo": "bar"})
+    executor = ToolExecutor()
+    manager = TaskManager(executor)
+
+    res = await manager._step_runner("test_action", {"foo": "bar"})
     assert res.success is True
     assert res.output == "executor-success"
-    assert executed == [("test_action", {"foo": "bar"})]
+    assert executed == [("test_action", {"arguments": {"foo": "bar"}})]
 

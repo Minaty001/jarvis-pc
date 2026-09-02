@@ -1,13 +1,20 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from jarvis.api.app import app, get_tool_executor
+from jarvis.api.app import create_api_app
+from jarvis.tools.executor import ToolExecutor
 from jarvis.config.settings import get_settings
 from jarvis.tools.base import ToolDefinition
 from jarvis.tools.executor import ConfirmationRequired, RiskLevel, ToolDenied
 from jarvis.tools.rate_limit import RateLimitExceeded
 
-client = TestClient(app)
+
+@pytest.fixture
+def api_components():
+    executor = ToolExecutor()
+    app = create_api_app(executor)
+    client = TestClient(app)
+    return client, executor
 
 
 @pytest.fixture(autouse=True)
@@ -18,14 +25,15 @@ def set_dev_env(monkeypatch):
     get_settings.cache_clear()
 
 
-def test_api_health_endpoint():
+def test_api_health_endpoint(api_components):
+    client, _ = api_components
     res = client.get("/health")
     assert res.status_code == 200
     assert res.json() == {"status": "ok"}
 
 
-def test_tool_denied_returns_403():
-    executor = get_tool_executor()
+def test_tool_denied_returns_403(api_components):
+    client, executor = api_components
 
     async def forbidden_handler():
         return "ok"
@@ -43,8 +51,8 @@ def test_tool_denied_returns_403():
     assert "denied" in res.json()["detail"].lower()
 
 
-def test_confirmation_required_returns_409():
-    executor = get_tool_executor()
+def test_confirmation_required_returns_409(api_components):
+    client, executor = api_components
 
     async def sensitive_handler():
         return "confirmed_ok"
@@ -62,8 +70,8 @@ def test_confirmation_required_returns_409():
     assert "confirmation" in res.json()["detail"].lower()
 
 
-def test_rate_limit_exceeded_returns_429(monkeypatch):
-    executor = get_tool_executor()
+def test_rate_limit_exceeded_returns_429(monkeypatch, api_components):
+    client, executor = api_components
 
     async def limited_handler():
         return "rate_ok"
@@ -86,8 +94,8 @@ def test_rate_limit_exceeded_returns_429(monkeypatch):
     assert "rate limit exceeded" in res.json()["detail"].lower()
 
 
-def test_value_error_returns_400():
-    executor = get_tool_executor()
+def test_value_error_returns_400(api_components):
+    client, executor = api_components
 
     async def invalid_args_handler():
         raise ValueError("Invalid argument value")
@@ -105,7 +113,8 @@ def test_value_error_returns_400():
     assert "invalid argument value" in res.json()["detail"].lower()
 
 
-def test_production_auth_mandatory_without_token(monkeypatch):
+def test_production_auth_mandatory_without_token(monkeypatch, api_components):
+    client, _ = api_components
     monkeypatch.setenv("JARVIS_ENVIRONMENT", "production")
     monkeypatch.delenv("JARVIS_API_TOKEN", raising=False)
     get_settings.cache_clear()

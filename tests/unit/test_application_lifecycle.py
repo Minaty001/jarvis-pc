@@ -31,11 +31,10 @@ async def test_application_lifecycle():
     dummy_voice = DummyComponent("voice")
     dummy_api = DummyComponent("api")
 
-    app = Application(
-        scheduler=dummy_scheduler,
-        voice=dummy_voice,
-        api=dummy_api,
-    )
+    app = Application()
+    app.scheduler = dummy_scheduler
+    app.voice = dummy_voice
+    app.api = dummy_api
 
     assert app.is_started is False
 
@@ -65,7 +64,9 @@ async def test_application_stop_handles_errors():
     good_component = DummyComponent("good")
     failing_component = DummyComponent("failing", fail_on_stop=True)
 
-    app = Application(scheduler=failing_component, voice=good_component)
+    app = Application()
+    app.scheduler = failing_component
+    app.voice = good_component
     await app.start()
 
     with pytest.raises(RuntimeError, match=r"1 component\(s\) failed to stop"):
@@ -79,7 +80,8 @@ async def test_application_stop_handles_errors():
 @pytest.mark.asyncio
 async def test_health_check():
     dummy = DummyComponent("scheduler")
-    app = Application(scheduler=dummy)
+    app = Application()
+    app.scheduler = dummy
 
     health_before = await check_health(app)
     assert health_before.status == "healthy"
@@ -93,7 +95,8 @@ async def test_health_check():
 
 def test_signal_handlers():
     dummy = DummyComponent("scheduler")
-    app = Application(scheduler=dummy)
+    app = Application()
+    app.scheduler = dummy
     # Register signal handlers on current event loop
     loop = asyncio.get_event_loop()
     handlers = setup_signal_handlers(app, loop=loop)
