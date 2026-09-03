@@ -84,7 +84,7 @@ Jarvis/
 
 ## 🛠️ Step-by-Step Installation Guide (Linux Mint & Ubuntu)
 
-Follow these exact steps to set up and install JARVIS PC connected to the production cloud backend (`https://jarvis-pc-7e8k.onrender.com`):
+Follow these exact steps to set up and install JARVIS PC connected to the production cloud backend (`https://(render-url.onrender.com`):
 
 ### Step 1: Install System Dependencies
 Install required system packages for GTK3 desktop UI, PulseAudio/PipeWire audio capture, PortAudio, and FFmpeg:
