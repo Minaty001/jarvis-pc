@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from typing import Callable, Optional, Dict, Any
 
 try:
@@ -85,11 +86,19 @@ class UIBridge:
 
     def _run_voice_loop_worker(self) -> None:
         """Worker thread running voice recognition with waveform feedback."""
-        from jarvis.voice.microphone import Microphone
-        from jarvis.voice.stt import transcribe_pcm
-        from jarvis.voice.tts import speak
+        try:
+            from jarvis.voice.microphone import Microphone
+            from jarvis.voice.stt import transcribe_pcm
+            from jarvis.voice.tts import speak
 
-        mic = Microphone()
+            mic = Microphone()
+        except Exception as exc:
+            logger.error("Failed to initialize voice hardware or models: %s", exc, exc_info=True)
+            if self.on_status and GTK_AVAILABLE and GLib:
+                GLib.idle_add(self.on_status, f"Voice init error: {exc}")
+            self._voice_session_active = False
+            return
+
         while self._voice_session_active and self._running:
             try:
                 if self.on_orb_state and GTK_AVAILABLE and GLib:
@@ -134,7 +143,8 @@ class UIBridge:
                     GLib.idle_add(self.on_status, "Voice Session Active")
 
             except Exception as exc:
-                logger.warning("Voice worker error: %s", exc)
+                logger.warning("Voice worker iteration error: %s", exc)
+                time.sleep(0.5)
                 if not self._voice_session_active:
                     break
 
@@ -228,7 +238,10 @@ class UIBridge:
             if self.agent and hasattr(self.agent, "run_goal"):
                 # Run complete goal planner + verifier
                 res = await self.agent.run_goal(text)
-                reply_text = res.get("reply", "Goal executed successfully.")
+                if isinstance(res, dict):
+                    reply_text = res.get("reply", "Goal executed successfully.")
+                else:
+                    reply_text = str(res)
             elif self.agent and hasattr(self.agent, "step"):
                 reply_text = await self.agent.step(text)
             else:

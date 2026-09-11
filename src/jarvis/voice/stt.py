@@ -66,5 +66,10 @@ def wav_at_16k(pcm, sample_rate: int) -> bytes:
     return pcm_to_wav_bytes(resample_16k(pcm, sample_rate), 16000)
 
 
+def transcribe_pcm(pcm, sample_rate: int = 16000) -> str:
+    """Transcribe raw int16 PCM numpy array into text."""
+    return transcribe(wav_at_16k(pcm, sample_rate))
+
+
 def _default_model_dir() -> str:
     return os.path.expanduser("~/.local/share/jarvis/models/vosk-model-small-en-us-0.15")
