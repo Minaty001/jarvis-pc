@@ -79,6 +79,13 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         extract_web_article,
         fetch_topic_news,
     )
+    from jarvis.tools.builtin.swarm_tools import (
+        handle_cancel_swarm_task,
+        handle_decompose_swarm_goal,
+        handle_get_swarm_task_details,
+        handle_list_swarm_tasks,
+        handle_spawn_background_worker,
+    )
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -455,4 +462,34 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"network.read", "research.web"}),
         handler=extract_web_article,
+    ))
+    registry.register(ToolDefinition(
+        name="spawn_background_worker",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"swarm.manage", "swarm.execute"}),
+        handler=handle_spawn_background_worker,
+    ))
+    registry.register(ToolDefinition(
+        name="list_swarm_tasks",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"swarm.manage"}),
+        handler=handle_list_swarm_tasks,
+    ))
+    registry.register(ToolDefinition(
+        name="get_swarm_task_details",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"swarm.manage"}),
+        handler=handle_get_swarm_task_details,
+    ))
+    registry.register(ToolDefinition(
+        name="cancel_swarm_task",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"swarm.manage"}),
+        handler=handle_cancel_swarm_task,
+    ))
+    registry.register(ToolDefinition(
+        name="decompose_swarm_goal",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"swarm.manage", "swarm.execute"}),
+        handler=handle_decompose_swarm_goal,
     ))

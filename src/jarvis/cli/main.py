@@ -272,6 +272,25 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     art_parser = subparsers.add_parser("article", help="Extract and read sanitized article content from URL")
     art_parser.add_argument("url", help="Web article URL")
 
+    swarm_parser = subparsers.add_parser("swarm", help="Autonomous Multi-Agent Swarm & Background Worker Manager")
+    swarm_sub = swarm_parser.add_subparsers(dest="swarm_action", help="Swarm action")
+
+    sw_list = swarm_sub.add_parser("list", help="List active and recent swarm workers")
+    sw_list.add_argument("--status", choices=["pending", "running", "completed", "failed", "cancelled"], default=None, help="Filter by status")
+    sw_list.add_argument("--role", choices=["researcher", "coder", "system", "writer", "general"], default=None, help="Filter by worker role")
+    sw_list.add_argument("--limit", type=int, default=20, help="Max tasks to show")
+
+    sw_spawn = swarm_sub.add_parser("spawn", help="Spawn a new background sub-agent worker")
+    sw_spawn.add_argument("role", choices=["researcher", "coder", "system", "writer", "general"], help="Worker role")
+    sw_spawn.add_argument("instruction", help="Task instruction / prompt")
+    sw_spawn.add_argument("--name", default="", help="Optional worker title")
+
+    sw_show = swarm_sub.add_parser("show", help="Show details, logs, and output of a swarm task")
+    sw_show.add_argument("id", help="Swarm task ID")
+
+    sw_cancel = swarm_sub.add_parser("cancel", help="Cancel a running swarm worker")
+    sw_cancel.add_argument("id", help="Swarm task ID")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
@@ -946,6 +965,92 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
         print(res["content"])
         print("=" * 70 + "\n")
         return 0
+
+    if parsed_args.subcommand == "swarm":
+        from jarvis.swarm.engine import get_swarm_engine
+        from jarvis.swarm.models import TaskStatus, WorkerRole
+
+        engine = get_swarm_engine()
+        action = parsed_args.swarm_action
+
+        if action == "list":
+            tasks = engine.list_tasks(status=parsed_args.status, role=parsed_args.role, limit=parsed_args.limit)
+            if not tasks:
+                print("\nNo swarm tasks found in database.\n")
+                return 0
+
+            print(f"\nJARVIS Autonomous Swarm Tasks ({len(tasks)} items):")
+            print("=" * 80)
+            print(f"{'ID':<16} | {'ROLE':<10} | {'STATUS':<11} | {'PROGRESS':<8} | {'NAME / INSTRUCTION'}")
+            print("-" * 80)
+            for t in tasks:
+                r_str = t.role.value if isinstance(t.role, WorkerRole) else str(t.role)
+                s_str = t.status.value if isinstance(t.status, TaskStatus) else str(t.status)
+                title = t.name or (t.instruction[:40] + "..." if len(t.instruction) > 40 else t.instruction)
+                print(f"{t.id:<16} | {r_str:<10} | {s_str:<11} | {t.progress_percent}%{'':<4} | {title}")
+            print("=" * 80 + "\n")
+            return 0
+
+        elif action == "spawn":
+            application = app if app is not None else Application()
+            client = getattr(application.agent, "client", None) if hasattr(application, "agent") else None
+            task = asyncio.run(
+                engine.spawn_worker(
+                    role=parsed_args.role,
+                    instruction=parsed_args.instruction,
+                    name=parsed_args.name,
+                    client=client,
+                )
+            )
+            print(f"\n[JARVIS Swarm] Sub-agent worker launched!")
+            print(f"• Task ID:     {task.id}")
+            print(f"• Name:        {task.name}")
+            print(f"• Role:        {task.role.value}")
+            print(f"• Status:      {task.status.value}")
+            print(f"• Instruction: {task.instruction}\n")
+            return 0
+
+        elif action == "show":
+            task = engine.get_task(parsed_args.id)
+            if not task:
+                print(f"\nSwarm task '{parsed_args.id}' not found.\n")
+                return 1
+
+            print("\n" + "=" * 75)
+            print(f"Swarm Task: {task.name} ({task.id})")
+            print(f"Role:       {task.role.value} | Status: {task.status.value} | Progress: {task.progress_percent}%")
+            print(f"Created:    {task.created_at}")
+            if task.started_at:
+                print(f"Started:    {task.started_at}")
+            if task.completed_at:
+                print(f"Completed:  {task.completed_at}")
+            print("-" * 75)
+            print(f"Instruction:\n{task.instruction}")
+            print("-" * 75)
+            if task.result:
+                print(f"Result Output:\n{task.result}")
+                print("-" * 75)
+            if task.error:
+                print(f"Error:\n{task.error}")
+                print("-" * 75)
+            if task.logs:
+                print(f"Execution Logs ({len(task.logs)} entries):")
+                for l in task.logs:
+                    print(f"[{l.get('timestamp', '')[:19]}] [{l.get('level', 'INFO')}] {l.get('message', '')}")
+            print("=" * 75 + "\n")
+            return 0
+
+        elif action == "cancel":
+            cancelled = asyncio.run(engine.cancel_task(parsed_args.id))
+            if cancelled:
+                print(f"\nSwarm task '{parsed_args.id}' successfully cancelled.\n")
+                return 0
+            print(f"\nCould not cancel task '{parsed_args.id}' (not running or not found).\n")
+            return 1
+
+        else:
+            print("Usage: jarvis swarm {list|spawn|show|cancel}")
+            return 1
 
     if parsed_args.subcommand == "telegram":
         from jarvis.remote.telegram import bridge_main
