@@ -177,6 +177,20 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     knowledge_sub.add_parser("status", help="Show knowledge base metrics and database path")
     knowledge_sub.add_parser("list", help="List all currently indexed files")
 
+    macro_parser = subparsers.add_parser("macro", help="Voice-Activated Workflow Macros & Action Pipelines")
+    macro_sub = macro_parser.add_subparsers(dest="macro_action", help="Macro action")
+    macro_sub.add_parser("list", help="List all configured workflow macros")
+    
+    m_run = macro_sub.add_parser("run", help="Execute a workflow macro by name")
+    m_run.add_argument("name", help="Macro name (e.g. coding_mode, meeting_prep, lockdown, health_check)")
+
+    m_show = macro_sub.add_parser("show", help="Display details and steps of a workflow macro")
+    m_show.add_argument("name", help="Macro name")
+
+    m_toggle = macro_sub.add_parser("toggle", help="Enable or disable a workflow macro")
+    m_toggle.add_argument("name", help="Macro name")
+    m_toggle.add_argument("state", choices=["enable", "disable"], help="State to set")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
@@ -452,6 +466,81 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
             return 0
         else:
             print("Usage: jarvis knowledge {search|index|ask|status|list}")
+            return 1
+
+    if parsed_args.subcommand == "macro":
+        from jarvis.macros.engine import MacroEngine
+        from jarvis.macros.store import MacroStore
+
+        application = app if app is not None else Application()
+        registry = getattr(getattr(application, "executor", None), "registry", None)
+        if not registry and hasattr(application, "tools"):
+            registry = getattr(application, "tools", None)
+        engine = MacroEngine(tool_registry=registry)
+
+        if parsed_args.macro_action == "list":
+            macros = engine.store.list_macros()
+            print("\nJARVIS Automated Workflow Macros:")
+            print("=" * 70)
+            for m in macros:
+                status = "ENABLED" if m.enabled else "DISABLED"
+                print(f"• {m.name:<22} [{status}] ({len(m.steps)} steps)")
+                print(f"  Triggers:    {', '.join(m.triggers)}")
+                print(f"  Description: {m.description}")
+                print("-" * 70)
+            print()
+            return 0
+
+        elif parsed_args.macro_action == "run":
+            macro_name = parsed_args.name
+            print(f"\n[JARVIS Macro] Executing workflow macro: '{macro_name}'...")
+
+            def on_step_progress(idx, step, out):
+                print(f"  [{idx}/{len(macro_obj.steps)}] {step.type.value.upper()}: {step.description or step.target} -> {out[:80]}")
+
+            macro_obj = engine.store.get_macro(macro_name)
+            if not macro_obj:
+                print(f"Error: Workflow macro '{macro_name}' not found.")
+                return 1
+
+            res = engine.execute_macro(macro_obj, on_step=on_step_progress)
+            print("=" * 70)
+            if res.success:
+                print(f"Status: SUCCESS ({res.steps_completed}/{res.total_steps} steps executed)")
+            else:
+                print(f"Status: FAILED ({res.error})")
+            print("=" * 70 + "\n")
+            return 0 if res.success else 1
+
+        elif parsed_args.macro_action == "show":
+            macro_obj = engine.store.get_macro(parsed_args.name)
+            if not macro_obj:
+                print(f"Macro '{parsed_args.name}' not found.")
+                return 1
+            print(f"\nWorkflow Macro: {macro_obj.name}")
+            print("=" * 70)
+            print(f"• Description: {macro_obj.description}")
+            print(f"• Enabled:     {macro_obj.enabled}")
+            print(f"• Triggers:    {', '.join(macro_obj.triggers)}")
+            print("\nPipeline Steps:")
+            for idx, s in enumerate(macro_obj.steps, start=1):
+                print(f"  {idx}. [{s.type.value.upper()}] target='{s.target}' args={s.args}")
+            print("=" * 70 + "\n")
+            return 0
+
+        elif parsed_args.macro_action == "toggle":
+            macro_obj = engine.store.get_macro(parsed_args.name)
+            if not macro_obj:
+                print(f"Macro '{parsed_args.name}' not found.")
+                return 1
+            enabled = parsed_args.state == "enable"
+            macro_obj.enabled = enabled
+            engine.store.save_macro(macro_obj)
+            print(f"Macro '{macro_obj.name}' is now {'ENABLED' if enabled else 'DISABLED'}.")
+            return 0
+
+        else:
+            print("Usage: jarvis macro {list|run|show|toggle}")
             return 1
 
     if parsed_args.subcommand == "telegram":

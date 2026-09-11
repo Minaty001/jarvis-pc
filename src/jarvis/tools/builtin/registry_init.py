@@ -45,6 +45,13 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         index_knowledge_directory,
         search_knowledge,
     )
+    from jarvis.tools.builtin.macro_tools import (
+        create_macro,
+        delete_macro,
+        list_macros,
+        run_macro,
+        toggle_macro,
+    )
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -277,4 +284,34 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"knowledge.search"}),
         handler=get_knowledge_stats,
+    ))
+    registry.register(ToolDefinition(
+        name="list_macros",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"macros.manage"}),
+        handler=list_macros,
+    ))
+    registry.register(ToolDefinition(
+        name="run_macro",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"macros.execute"}),
+        handler=run_macro,
+    ))
+    registry.register(ToolDefinition(
+        name="create_macro",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"macros.manage"}),
+        handler=create_macro,
+    ))
+    registry.register(ToolDefinition(
+        name="delete_macro",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"macros.manage"}),
+        handler=delete_macro,
+    ))
+    registry.register(ToolDefinition(
+        name="toggle_macro",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"macros.manage"}),
+        handler=toggle_macro,
     ))

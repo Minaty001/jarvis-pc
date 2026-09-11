@@ -268,6 +268,26 @@ class JarvisAgent:
         else:
             stored_transcript = []
 
+        # Check for matching workflow macro trigger
+        try:
+            from jarvis.macros.engine import MacroEngine
+            engine = MacroEngine(tool_registry=self.executor.registry)
+            matched_macro = engine.find_macro_by_trigger(user_text)
+            if matched_macro:
+                logger.info("Executing workflow macro '%s' triggered by '%s'", matched_macro.name, user_text)
+                exec_result = engine.execute_macro(matched_macro)
+                if exec_result.success:
+                    reply = f"Workflow macro '{matched_macro.name}' executed successfully ({exec_result.steps_completed} steps completed)."
+                else:
+                    reply = f"Workflow macro '{matched_macro.name}' encountered an error: {exec_result.error}"
+                if self.memory:
+                    self.memory.add(user_text, reply)
+                if self.task_store is not None:
+                    self.task_store.set_status(session_id, "completed" if exec_result.success else "failed")
+                return reply
+        except Exception as exc:
+            logger.debug("Macro trigger match check error: %s", exc)
+
         schemas = _tool_schemas(self.executor.registry)
         memories = self.memory.recall(user_text) if self.memory else None
 
