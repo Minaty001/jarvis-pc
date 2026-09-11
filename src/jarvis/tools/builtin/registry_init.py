@@ -39,6 +39,12 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         toggle_auto_wake,
         tune_voice_acoustics,
     )
+    from jarvis.tools.builtin.knowledge_tools import (
+        ask_knowledge_base,
+        get_knowledge_stats,
+        index_knowledge_directory,
+        search_knowledge,
+    )
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -247,4 +253,28 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"voice.config"}),
         handler=configure_wake_word,
+    ))
+    registry.register(ToolDefinition(
+        name="search_knowledge",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"filesystem.read", "knowledge.search"}),
+        handler=search_knowledge,
+    ))
+    registry.register(ToolDefinition(
+        name="index_knowledge_directory",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"filesystem.read", "knowledge.index"}),
+        handler=index_knowledge_directory,
+    ))
+    registry.register(ToolDefinition(
+        name="ask_knowledge_base",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"filesystem.read", "knowledge.search"}),
+        handler=ask_knowledge_base,
+    ))
+    registry.register(ToolDefinition(
+        name="get_knowledge_stats",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"knowledge.search"}),
+        handler=get_knowledge_stats,
     ))

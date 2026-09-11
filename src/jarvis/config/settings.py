@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     wake_ack_phrase: str = "Yes, sir?"
     wake_followup_timeout: float = Field(default=6.0, ge=0.1, le=60.0)
     wake_vad_threshold: int = Field(default=350, ge=100, le=2000)
+    knowledge_dirs: str = "~/Documents,~/Notes"
+    knowledge_db_path: str | None = None
+    knowledge_chunk_size: int = Field(default=500, ge=50, le=2000)
+    knowledge_chunk_overlap: int = Field(default=100, ge=0, le=500)
+    knowledge_auto_index: bool = True
 
 
 @lru_cache

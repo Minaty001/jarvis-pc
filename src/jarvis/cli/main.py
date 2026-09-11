@@ -158,6 +158,25 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     briefing_parser.add_argument("--location", default=None, help="Location or city override")
     briefing_parser.add_argument("--speak", action="store_true", help="Read briefing aloud via neural TTS")
 
+    knowledge_parser = subparsers.add_parser("knowledge", help="Personal Knowledge Base & Local File Semantic Search (RAG)")
+    knowledge_sub = knowledge_parser.add_subparsers(dest="knowledge_action", help="Knowledge action")
+    
+    k_search = knowledge_sub.add_parser("search", help="Search indexed local files with BM25")
+    k_search.add_argument("query", help="Search query")
+    k_search.add_argument("--limit", type=int, default=5, help="Max results (default: 5)")
+    k_search.add_argument("--pattern", default=None, help="File path pattern filter")
+
+    k_index = knowledge_sub.add_parser("index", help="Index a directory into the local knowledge base")
+    k_index.add_argument("path", nargs="?", default=".", help="Directory path to index (default: current directory)")
+    k_index.add_argument("--no-recursive", action="store_true", help="Do not index subdirectories recursively")
+    k_index.add_argument("--force", action="store_true", help="Force re-indexing of all files")
+
+    k_ask = knowledge_sub.add_parser("ask", help="Ask a question answered via local documents with citations")
+    k_ask.add_argument("question", help="Question to ask")
+
+    knowledge_sub.add_parser("status", help="Show knowledge base metrics and database path")
+    knowledge_sub.add_parser("list", help="List all currently indexed files")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
@@ -361,6 +380,79 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
         print(briefing_text)
         print("=" * 65 + "\n")
         return 0
+
+    if parsed_args.subcommand == "knowledge":
+        from jarvis.knowledge.indexer import KnowledgeIndexer
+        from jarvis.knowledge.rag import KnowledgeAssistant
+        from jarvis.knowledge.store import KnowledgeStore
+
+        store = KnowledgeStore()
+
+        if parsed_args.knowledge_action == "search":
+            results = store.search(
+                query=parsed_args.query,
+                limit=parsed_args.limit,
+                file_pattern=parsed_args.pattern,
+            )
+            if not results:
+                print(f"No results found for query '{parsed_args.query}'.")
+            else:
+                print(f"\nKnowledge Search Results ({len(results)} matches for '{parsed_args.query}'):")
+                print("=" * 70)
+                for i, r in enumerate(results, start=1):
+                    print(f"[{i}] {r['path']} (Lines {r['start_line']}-{r['end_line']}) [Rank: {r['score']}]")
+                    snippet = "\n    ".join(r["content"].strip().splitlines()[:5])
+                    print(f"    {snippet}")
+                    print("-" * 70)
+                print()
+            return 0
+
+        elif parsed_args.knowledge_action == "index":
+            indexer = KnowledgeIndexer(store=store)
+            rec = not parsed_args.no_recursive
+            print(f"Scanning and indexing '{parsed_args.path}' (recursive={rec})...")
+            res = indexer.index_directory(parsed_args.path, recursive=rec, force=parsed_args.force)
+            print(f"Index complete: {res['indexed']} indexed, {res['skipped']} skipped, {res['errors']} errors.")
+            return 0
+
+        elif parsed_args.knowledge_action == "ask":
+            application = app if app is not None else Application()
+            client = getattr(application.agent, "client", None) if hasattr(application, "agent") else None
+            assistant = KnowledgeAssistant(store=store, llm_client=client)
+            print(f"\n[JARVIS Knowledge RAG] Synthesizing answer for: '{parsed_args.question}'...")
+            reply = assistant.ask(parsed_args.question)
+            print("\n" + "=" * 70)
+            print(reply)
+            print("=" * 70 + "\n")
+            return 0
+
+        elif parsed_args.knowledge_action == "status":
+            stats = store.get_stats()
+            mb = stats["total_bytes"] / (1024 * 1024)
+            print("\nJARVIS Knowledge Base Status:")
+            print("=" * 60)
+            print(f"• Total Indexed Files:  {stats['total_files']}")
+            print(f"• Total Text Chunks:    {stats['total_chunks']}")
+            print(f"• Total Indexed Size:   {mb:.2f} MB")
+            print(f"• Database Path:        {stats['db_path']}")
+            print("=" * 60 + "\n")
+            return 0
+
+        elif parsed_args.knowledge_action == "list":
+            files = store.list_files(limit=50)
+            if not files:
+                print("No files indexed in knowledge base yet. Run 'jarvis knowledge index <path>' to start.")
+            else:
+                print(f"\nIndexed Files ({len(files)}):")
+                print("=" * 70)
+                for f in files:
+                    kb = f["size"] / 1024
+                    print(f"• {f['path']} ({f['chunks_count']} chunks, {kb:.1f} KB)")
+                print("=" * 70 + "\n")
+            return 0
+        else:
+            print("Usage: jarvis knowledge {search|index|ask|status|list}")
+            return 1
 
     if parsed_args.subcommand == "telegram":
         from jarvis.remote.telegram import bridge_main
