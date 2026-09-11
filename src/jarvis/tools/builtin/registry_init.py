@@ -74,6 +74,11 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         list_agenda,
         set_timer,
     )
+    from jarvis.tools.builtin.research_tools import (
+        deep_web_research,
+        extract_web_article,
+        fetch_topic_news,
+    )
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -432,4 +437,22 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"scheduler.manage"}),
         handler=cancel_agenda_item,
+    ))
+    registry.register(ToolDefinition(
+        name="deep_web_research",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"network.read", "research.web"}),
+        handler=deep_web_research,
+    ))
+    registry.register(ToolDefinition(
+        name="fetch_topic_news",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"network.read", "research.news"}),
+        handler=fetch_topic_news,
+    ))
+    registry.register(ToolDefinition(
+        name="extract_web_article",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"network.read", "research.web"}),
+        handler=extract_web_article,
     ))

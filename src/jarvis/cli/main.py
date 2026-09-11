@@ -262,6 +262,16 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
 
     agenda_sub.add_parser("clear", help="Clear completed and cancelled agenda items")
 
+    res_parser = subparsers.add_parser("research", help="Autonomous deep web research and factual synthesis")
+    res_parser.add_argument("query", nargs="+", help="Research query or investigation topic")
+
+    news_parser = subparsers.add_parser("news", help="Fetch real-time breaking news headlines")
+    news_parser.add_argument("topic", nargs="?", default="tech", choices=["tech", "linux", "ai", "science", "security", "world"], help="News category / topic")
+    news_parser.add_argument("--limit", type=int, default=6, help="Number of headlines to fetch")
+
+    art_parser = subparsers.add_parser("article", help="Extract and read sanitized article content from URL")
+    art_parser.add_argument("url", help="Web article URL")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
@@ -880,6 +890,62 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
         else:
             print("Usage: jarvis agenda {list|add|cancel|clear}")
             return 1
+
+    if parsed_args.subcommand == "research":
+        from jarvis.research.engine import get_research_engine
+
+        query_str = " ".join(parsed_args.query) if isinstance(parsed_args.query, list) else str(parsed_args.query)
+        print(f"\n[JARVIS Research Engine] Investigating: '{query_str}'...")
+        application = app if app is not None else Application()
+        client = getattr(application.agent, "client", None) if hasattr(application, "agent") else None
+        engine = get_research_engine()
+        res = asyncio.run(engine.research_topic(query_str, client=client))
+
+        print("\n" + "=" * 70)
+        print(res["summary"])
+        print("=" * 70)
+        if res.get("sources"):
+            print(f"\nVerified Sources ({len(res['sources'])} references):")
+            for s in res["sources"]:
+                print(f"[{s['index']}] {s['title']}")
+                print(f"    {s['url']}")
+        print()
+        return 0
+
+    if parsed_args.subcommand == "news":
+        from jarvis.research.news import fetch_news
+
+        articles = asyncio.run(fetch_news(topic=parsed_args.topic, limit=parsed_args.limit))
+        if not articles:
+            print(f"No news headlines found for category '{parsed_args.topic}'.")
+            return 1
+
+        print(f"\nJARVIS Real-Time News Feed [{parsed_args.topic.upper()}] ({len(articles)} headlines):")
+        print("=" * 70)
+        for idx, a in enumerate(articles, start=1):
+            print(f"[{idx}] {a['title']}")
+            print(f"    Published: {a['published']}")
+            print(f"    Summary:   {a['summary']}")
+            print(f"    Source:    {a['url']}")
+            print("-" * 70)
+        print()
+        return 0
+
+    if parsed_args.subcommand == "article":
+        from jarvis.research.extractor import extract_article
+
+        res = asyncio.run(extract_article(parsed_args.url))
+        if not res["success"]:
+            print(f"\nError: {res['content']}\n")
+            return 1
+
+        print("\n" + "=" * 70)
+        print(f"Title:  {res['title']}")
+        print(f"Source: {res['url']} ({res['length']} chars)")
+        print("=" * 70)
+        print(res["content"])
+        print("=" * 70 + "\n")
+        return 0
 
     if parsed_args.subcommand == "telegram":
         from jarvis.remote.telegram import bridge_main
