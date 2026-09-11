@@ -1,12 +1,12 @@
 """
-JARVIS Real-Time Audio Waveform Widget — Pure Cairo Rendering in GTK3.
+JARVIS Real-Time Audio Waveform & Spectrum Equalizer Widget — Pure Cairo Rendering in GTK3.
 """
 
 from __future__ import annotations
 
 import math
 import logging
-from typing import Optional
+from typing import List, Optional
 
 try:
     import gi
@@ -24,9 +24,9 @@ logger = logging.getLogger(__name__)
 
 
 class WaveformWidget(Gtk.DrawingArea if GTK_AVAILABLE else object):  # type: ignore
-    """Real-time Cairo animated audio waveform and frequency visualizer."""
+    """Real-time Cairo animated audio waveform and multi-band frequency visualizer."""
 
-    def __init__(self, width: int = 240, height: int = 56, state: str = "idle"):
+    def __init__(self, width: int = 260, height: int = 60, state: str = "idle"):
         if not GTK_AVAILABLE:
             raise RuntimeError("GTK 3.0 or Cairo is not available.")
         super().__init__()
@@ -40,6 +40,11 @@ class WaveformWidget(Gtk.DrawingArea if GTK_AVAILABLE else object):  # type: ign
         self._target_level = 0.05
         self._tick = 0
         self._animating = True
+
+        # 16-band spectrum bar levels & peak hold
+        self._num_bars = 16
+        self._bars: List[float] = [0.05] * self._num_bars
+        self._peaks: List[float] = [0.05] * self._num_bars
 
         self.set_app_paintable(True)
         self.connect("draw", self._on_draw)
@@ -84,7 +89,6 @@ class WaveformWidget(Gtk.DrawingArea if GTK_AVAILABLE else object):  # type: ign
             synthetic_energy = 0.35 + 0.30 * math.sin(self._tick * 0.22) * math.cos(self._tick * 0.15)
             self._level += (synthetic_energy - self._level) * 0.25
         elif self._state == "thinking":
-            # Scanning wave
             synthetic_energy = 0.20 + 0.15 * math.sin(self._tick * 0.18)
             self._level += (synthetic_energy - self._level) * 0.20
 
@@ -95,6 +99,18 @@ class WaveformWidget(Gtk.DrawingArea if GTK_AVAILABLE else object):  # type: ign
         # Decay target energy slowly towards ambient baseline
         baseline = 0.06 if self._state == "idle" else 0.12
         self._target_level += (baseline - self._target_level) * 0.08
+
+        # Animate multi-band spectrum bars
+        for i in range(self._num_bars):
+            harmonic = math.sin(self._phase * 1.5 + i * 0.45) * 0.3 + 0.7
+            target_bar = min(1.0, max(0.04, self._level * harmonic * (1.1 - abs(i - 7.5) / 10.0)))
+            self._bars[i] += (target_bar - self._bars[i]) * 0.35
+
+            # Peak hold
+            if self._bars[i] >= self._peaks[i]:
+                self._peaks[i] = self._bars[i]
+            else:
+                self._peaks[i] = max(0.04, self._peaks[i] - 0.015)
 
         self.queue_draw()
         return True
@@ -121,7 +137,28 @@ class WaveformWidget(Gtk.DrawingArea if GTK_AVAILABLE else object):  # type: ign
         cr.fill()
         cr.restore()
 
-        # 2. Render 3 layered harmonic sine waves with fading alpha
+        # 2. Render spectrum equalizer bars in background
+        cr.save()
+        bar_w = (w - (self._num_bars * 3)) / self._num_bars
+        max_bar_h = h * 0.75
+        for i in range(self._num_bars):
+            bx = i * (bar_w + 3) + 2
+            bh = self._bars[i] * max_bar_h
+            by = cy - bh / 2.0
+
+            # Bar
+            cr.set_source_rgba(r, g, b, 0.22 + self._bars[i] * 0.35)
+            cr.rectangle(bx, by, bar_w, bh)
+            cr.fill()
+
+            # Peak Cap
+            py = cy - (self._peaks[i] * max_bar_h) / 2.0
+            cr.set_source_rgba(r, g, b, 0.75)
+            cr.rectangle(bx, py - 1.5, bar_w, 2.0)
+            cr.fill()
+        cr.restore()
+
+        # 3. Render 3 layered harmonic sine waves with fading alpha
         layers = [
             {"freq": 1.8, "amp_mult": 0.5, "phase_shift": 0.0, "alpha": 0.35, "width": 1.2},
             {"freq": 2.6, "amp_mult": 0.75, "phase_shift": 1.2, "alpha": 0.60, "width": 1.8},
@@ -139,9 +176,7 @@ class WaveformWidget(Gtk.DrawingArea if GTK_AVAILABLE else object):  # type: ign
             steps = int(w / 4)
             for i in range(steps + 1):
                 x = (i / steps) * w
-                # Normalized coordinate from 0 to 1
                 norm_x = x / w
-                # Window function to taper the waves at the edges (Hann window shape)
                 envelope = math.sin(norm_x * math.pi)
                 wave_val = math.sin(norm_x * layer["freq"] * 2 * math.pi + self._phase + layer["phase_shift"])
                 y = cy + wave_val * max_amp * layer["amp_mult"] * envelope
@@ -149,15 +184,5 @@ class WaveformWidget(Gtk.DrawingArea if GTK_AVAILABLE else object):  # type: ign
 
             cr.stroke()
             cr.restore()
-
-        # 3. Centerline pulse dot
-        cr.save()
-        center_glow = cairo.RadialGradient(w / 2.0, cy, 1.0, w / 2.0, cy, 8.0 + self._level * 12.0)
-        center_glow.add_color_stop_rgba(0.0, r, g, b, 0.8)
-        center_glow.add_color_stop_rgba(1.0, r, g, b, 0.0)
-        cr.set_source(center_glow)
-        cr.arc(w / 2.0, cy, 8.0 + self._level * 12.0, 0, 2 * math.pi)
-        cr.fill()
-        cr.restore()
 
         return True

@@ -1,9 +1,11 @@
-"""JARVIS Animated Arc-Reactor Orb Widget — Pure Cairo Rendering in GTK3."""
+"""JARVIS Animated Arc-Reactor Orb Widget — Pure Cairo Rendering with Reactive Particle Physics in GTK3."""
 
 from __future__ import annotations
 
 import math
 import logging
+import random
+from typing import List
 
 try:
     import gi
@@ -21,8 +23,22 @@ from jarvis.ui.theme import ORB_STATES, hex_to_rgba
 logger = logging.getLogger(__name__)
 
 
+class OrbParticle:
+    """Individual orbital particle around the Arc-Reactor core."""
+
+    def __init__(self, index: int, total: int):
+        self.angle = (index / total) * 2 * math.pi
+        self.base_rad = random.uniform(0.55, 0.95)
+        self.speed = random.uniform(0.015, 0.045) * (1 if random.random() > 0.3 else -1)
+        self.size = random.uniform(1.2, 2.8)
+        self.alpha = random.uniform(0.3, 0.85)
+
+    def step(self, pulse_mult: float):
+        self.angle = (self.angle + self.speed * (1.0 + pulse_mult * 3.0)) % (2 * math.pi)
+
+
 class OrbWidget(Gtk.DrawingArea if GTK_AVAILABLE else object):  # type: ignore
-    """Cairo-based animated Arc-Reactor Orb widget."""
+    """Cairo-based animated Arc-Reactor Orb widget with reactive particle vortex."""
 
     def __init__(self, size: int = 220, state: str = "idle"):
         if not GTK_AVAILABLE:
@@ -37,6 +53,10 @@ class OrbWidget(Gtk.DrawingArea if GTK_AVAILABLE else object):  # type: ignore
         self._target_pulse = 0.05
         self._tick = 0
         self._animating = True
+
+        # Initialize 32 orbital particles
+        self._particles: List[OrbParticle] = [OrbParticle(i, 32) for i in range(32)]
+
         self.set_app_paintable(True)
         self.connect("draw", self._on_draw)
         self.connect("destroy", self._on_destroy)
@@ -45,7 +65,7 @@ class OrbWidget(Gtk.DrawingArea if GTK_AVAILABLE else object):  # type: ignore
     def set_state(self, state: str) -> None:
         if state in ORB_STATES:
             self._state = state
-        self._target_pulse = 0.18 if state in ("listening", "speaking", "working", "thinking") else 0.05
+        self._target_pulse = 0.22 if state in ("listening", "speaking", "working", "thinking") else 0.05
         self.queue_draw()
 
     def set_label(self, text: str) -> None:
@@ -72,7 +92,12 @@ class OrbWidget(Gtk.DrawingArea if GTK_AVAILABLE else object):  # type: ignore
         self._tick += 1
         speed = 0.06 if self._state in ("thinking", "working") else 0.02
         self._phase = (self._phase + speed) % (2 * math.pi)
-        self._pulse += (self._target_pulse - self._pulse) * 0.1
+        self._pulse += (self._target_pulse - self._pulse) * 0.12
+
+        # Step orbital particles
+        for p in self._particles:
+            p.step(self._pulse)
+
         self.queue_draw()
         return True
 
@@ -85,98 +110,93 @@ class OrbWidget(Gtk.DrawingArea if GTK_AVAILABLE else object):  # type: ignore
             return False
 
         pulse_offset = math.sin(self._tick * 0.08) * (base_r * self._pulse)
-        core_r = max(6.0, base_r * 0.42 + pulse_offset)
+        core_r = max(6.0, base_r * 0.40 + pulse_offset)
 
         hex_col = ORB_STATES.get(self._state, "#39e0a0")
         r, g, b, _ = hex_to_rgba(hex_col, 1.0)
 
-        # 1. Background glow
+        # 1. Background radial glow
         cr.save()
-        glow = cairo.RadialGradient(cx, cy, core_r * 0.1, cx, cy, base_r * 1.1)
-        glow.add_color_stop_rgba(0.0, r, g, b, 0.45)
-        glow.add_color_stop_rgba(0.5, r, g, b, 0.15)
+        glow = cairo.RadialGradient(cx, cy, core_r * 0.1, cx, cy, base_r * 1.15)
+        glow.add_color_stop_rgba(0.0, r, g, b, 0.45 + self._pulse * 0.3)
+        glow.add_color_stop_rgba(0.5, r, g, b, 0.12 + self._pulse * 0.15)
         glow.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.0)
         cr.set_source(glow)
-        cr.arc(cx, cy, base_r * 1.1, 0, 2 * math.pi)
+        cr.arc(cx, cy, base_r * 1.15, 0, 2 * math.pi)
         cr.fill()
         cr.restore()
 
-        # 2. Outer decorative ring
+        # 2. Orbital Particle Vortex
+        cr.save()
+        for p in self._particles:
+            p_rad = base_r * (p.base_rad + self._pulse * 0.18)
+            px = cx + math.cos(p.angle) * p_rad
+            py = cy + math.sin(p.angle) * p_rad
+            p_size = p.size * (1.0 + self._pulse * 0.5)
+
+            cr.set_source_rgba(r, g, b, p.alpha * (0.6 + self._pulse * 0.4))
+            cr.arc(px, py, p_size, 0, 2 * math.pi)
+            cr.fill()
+        cr.restore()
+
+        # 3. Outer Segmented Ring
+        cr.save()
+        cr.set_line_width(2.0)
+        cr.set_source_rgba(r, g, b, 0.4)
+        num_segments = 12
+        seg_len = (2 * math.pi) / num_segments
+        for i in range(num_segments):
+            start_a = i * seg_len + self._phase
+            end_a = start_a + seg_len * 0.65
+            cr.arc(cx, cy, base_r * 0.95, start_a, end_a)
+            cr.stroke()
+        cr.restore()
+
+        # 4. Middle Counter-Rotating Dash Ring
         cr.save()
         cr.set_line_width(1.5)
-        cr.set_source_rgba(r, g, b, 0.25)
-        cr.arc(cx, cy, base_r, 0, 2 * math.pi)
+        cr.set_source_rgba(r, g, b, 0.6)
+        cr.set_dash([4.0, 6.0], -self._phase * 15.0)
+        cr.arc(cx, cy, base_r * 0.72, 0, 2 * math.pi)
         cr.stroke()
         cr.restore()
 
-        # 3. Outer rotating tick ring (counter-clockwise)
-        cr.save()
-        outer_ticks = 24
-        for i in range(outer_ticks):
-            angle = (2 * math.pi / outer_ticks) * i - self._phase
-            t_len = 7.0 if i % 3 == 0 else 4.0
-            r1 = base_r - 2.0
-            r2 = r1 - t_len
-            x1 = cx + r1 * math.cos(angle)
-            y1 = cy + r1 * math.sin(angle)
-            x2 = cx + r2 * math.cos(angle)
-            y2 = cy + r2 * math.sin(angle)
-            cr.set_line_width(2.0 if i % 3 == 0 else 1.0)
-            alpha = 0.8 if i % 3 == 0 else 0.4
-            cr.set_source_rgba(r, g, b, alpha)
-            cr.move_to(x1, y1)
-            cr.line_to(x2, y2)
-            cr.stroke()
-        cr.restore()
-
-        # 4. Middle rotating arc segment
+        # 5. Core Arc-Reactor Ring with 6 Power Nodes
         cr.save()
         cr.set_line_width(2.5)
-        cr.set_source_rgba(r, g, b, 0.7)
-        mid_r = base_r * 0.72
-        cr.arc(cx, cy, mid_r, self._phase, self._phase + math.pi * 0.75)
-        cr.stroke()
-        cr.arc(cx, cy, mid_r, self._phase + math.pi, self._phase + math.pi * 1.75)
-        cr.stroke()
-        cr.restore()
-
-        # 5. Inner rotating tick ring (clockwise)
-        cr.save()
-        inner_ticks = 16
-        inner_r = base_r * 0.58
-        for i in range(inner_ticks):
-            angle = (2 * math.pi / inner_ticks) * i + (self._phase * 1.4)
-            x1 = cx + inner_r * math.cos(angle)
-            y1 = cy + inner_r * math.sin(angle)
-            x2 = cx + (inner_r - 5.0) * math.cos(angle)
-            y2 = cy + (inner_r - 5.0) * math.sin(angle)
-            cr.set_line_width(1.2)
-            cr.set_source_rgba(r, g, b, 0.5)
-            cr.move_to(x1, y1)
-            cr.line_to(x2, y2)
-            cr.stroke()
-        cr.restore()
-
-        # 6. Central Arc Core
-        cr.save()
-        core_grad = cairo.RadialGradient(cx, cy, 0.0, cx, cy, core_r)
-        core_grad.add_color_stop_rgba(0.0, 1.0, 1.0, 1.0, 0.95)
-        core_grad.add_color_stop_rgba(0.4, r, g, b, 0.85)
-        core_grad.add_color_stop_rgba(0.85, r, g, b, 0.3)
-        core_grad.add_color_stop_rgba(1.0, r, g, b, 0.0)
-        cr.set_source(core_grad)
+        cr.set_source_rgba(r, g, b, 0.85)
         cr.arc(cx, cy, core_r, 0, 2 * math.pi)
+        cr.stroke()
+
+        # Nodes
+        for i in range(6):
+            ang = (i / 6.0) * 2 * math.pi + self._phase * 0.5
+            nx = cx + math.cos(ang) * core_r
+            ny = cy + math.sin(ang) * core_r
+            cr.set_source_rgba(r, g, b, 0.95)
+            cr.arc(nx, ny, 3.0 + self._pulse * 2.0, 0, 2 * math.pi)
+            cr.fill()
+        cr.restore()
+
+        # 6. Center Inner Core Bloom
+        cr.save()
+        inner_glow = cairo.RadialGradient(cx, cy, 0, cx, cy, core_r * 0.6)
+        inner_glow.add_color_stop_rgba(0.0, 1.0, 1.0, 1.0, 0.9)
+        inner_glow.add_color_stop_rgba(0.4, r, g, b, 0.8)
+        inner_glow.add_color_stop_rgba(1.0, r, g, b, 0.0)
+        cr.set_source(inner_glow)
+        cr.arc(cx, cy, core_r * 0.6, 0, 2 * math.pi)
         cr.fill()
         cr.restore()
 
-        # 7. Optional center label
+        # 7. Center Status Label
         if self._label:
             cr.save()
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.95)
             cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
-            cr.set_font_size(max(10, int(base_r * 0.16)))
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.9)
+            cr.set_font_size(max(10.0, base_r * 0.16))
             extents = cr.text_extents(self._label)
-            cr.move_to(cx - extents.width / 2.0, cy + extents.height / 2.0)
+            cr.move_to(cx - extents.width / 2.0 - extents.x_bearing, cy - extents.height / 2.0 - extents.y_bearing)
             cr.show_text(self._label)
             cr.restore()
 
