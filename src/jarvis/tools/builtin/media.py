@@ -3,7 +3,13 @@ Media and Camera device utilities.
 """
 
 import os
+import re
 from pathlib import Path
+from urllib.parse import quote_plus
+
+import httpx
+
+from jarvis.system.process import ProcessResult, run_process
 
 
 class CameraPermissionError(PermissionError):
@@ -13,18 +19,6 @@ class CameraPermissionError(PermissionError):
 
 
 def check_camera_permissions(device_path: str = "/dev/video0") -> bool:
-    """Check permissions for a camera device.
-
-    Args:
-        device_path: Path to the video device file (default: "/dev/video0").
-
-    Returns:
-        True if the device exists and is accessible.
-        False if the device does not exist.
-
-    Raises:
-        CameraPermissionError: If the device exists but permission is denied.
-    """
     path = Path(device_path)
     if not path.exists():
         return False
@@ -36,3 +30,29 @@ def check_camera_permissions(device_path: str = "/dev/video0") -> bool:
         )
 
     return True
+
+
+_YT_SEARCH_URL = "https://www.youtube.com/results?search_query={}"
+_VIDEO_ID_RE = re.compile(r'"videoId"\s*:\s*"([A-Za-z0-9_-]{11})"')
+_YT_WATCH = "https://www.youtube.com/watch?v={}"
+
+
+async def play_song(query: str) -> str:
+    """Resolve the top YouTube result for a query and open it in the browser."""
+    search_url = _YT_SEARCH_URL.format(quote_plus(query.strip()))
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            search_url,
+            headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0"},
+            follow_redirects=True,
+        )
+        resp.raise_for_status()
+
+    match = _VIDEO_ID_RE.search(resp.text)
+    if not match:
+        return "Sorry, sir — no video found for that query."
+
+    video_id = match.group(1)
+    watch_url = _YT_WATCH.format(video_id)
+    await run_process(["xdg-open", watch_url], timeout=10.0)
+    return f"Opened video https://www.youtube.com/watch?v={video_id} (query: {query})"

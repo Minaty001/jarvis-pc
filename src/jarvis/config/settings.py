@@ -1,7 +1,7 @@
 """Typed Pydantic configuration settings for JARVIS."""
 
 from functools import lru_cache
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from jarvis.config.defaults import (
@@ -33,6 +33,22 @@ class Settings(BaseSettings):
     command_timeout_seconds: float = Field(
         default=DEFAULT_COMMAND_TIMEOUT_SECONDS, gt=0, le=300
     )
+    llm_base_url: str | None = None
+    llm_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "JARVIS_LLM_API_KEY", "LLM_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY"
+        ),
+    )
+    llm_model: str | None = None
+    voice: str = "en-US-GuyNeural"
+    telegram_token: str | None = None
+    telegram_allowed_chats: str | None = None
+    proactive_ram_threshold: float = Field(default=85.0, ge=10.0, le=100.0)
+    proactive_disk_threshold: float = Field(default=90.0, ge=10.0, le=100.0)
+    proactive_cpu_threshold: float = Field(default=90.0, ge=10.0, le=100.0)
+    proactive_battery_threshold: float = Field(default=15.0, ge=1.0, le=100.0)
+    proactive_interval: float = Field(default=30.0, ge=5.0, le=600.0)
 
 
 @lru_cache

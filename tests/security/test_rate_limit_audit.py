@@ -62,7 +62,7 @@ async def test_tool_executor_enforces_rate_limit():
     async def dummy_handler():
         return "ok"
 
-    executor.register(ToolDefinition("test_tool", RiskLevel.SAFE, dummy_handler))
+    executor.register(ToolDefinition("test_tool", RiskLevel.SAFE, handler=dummy_handler))
 
     ctx = ExecutionContext(session_id="s1", task_id="t1", user_id="u1", request_id="r1")
     res = await executor.execute("test_tool", context=ctx)
@@ -81,7 +81,7 @@ async def test_tool_executor_logs_audit(caplog):
     async def dummy_handler(password: str):
         return "ok"
 
-    executor.register(ToolDefinition("auth_tool", RiskLevel.SAFE, dummy_handler))
+    executor.register(ToolDefinition("auth_tool", RiskLevel.SAFE, handler=dummy_handler))
     ctx = ExecutionContext(session_id="s1", task_id="t1", user_id="u1", request_id="req-999")
 
     res = await executor.execute("auth_tool", password="my_password", context=ctx)

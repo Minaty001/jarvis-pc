@@ -16,7 +16,7 @@ async def test_tool_executor_safe():
     async def sample_handler(val: str):
         return f"result-{val}"
 
-    executor.register(ToolDefinition("safe_tool", RiskLevel.SAFE, sample_handler))
+    executor.register(ToolDefinition("safe_tool", RiskLevel.SAFE, handler=sample_handler))
     ctx = ExecutionContext("s1", "t1", "u1", "r1")
     res = await executor.execute("safe_tool", context=ctx, val="123")
     assert res == "result-123"
@@ -28,7 +28,7 @@ async def test_tool_executor_confirm_requires_flag():
     async def confirm_handler():
         return "done"
 
-    executor.register(ToolDefinition("confirm_tool", RiskLevel.CONFIRM, confirm_handler))
+    executor.register(ToolDefinition("confirm_tool", RiskLevel.CONFIRM, handler=confirm_handler))
     ctx = ExecutionContext("s1", "t1", "u1", "r1")
     with pytest.raises(ConfirmationRequired):
         await executor.execute("confirm_tool", context=ctx)
@@ -44,7 +44,7 @@ async def test_tool_executor_forbidden_denied():
     async def forbidden_handler():
         return "bad"
 
-    executor.register(ToolDefinition("forbidden_tool", RiskLevel.FORBIDDEN, forbidden_handler))
+    executor.register(ToolDefinition("forbidden_tool", RiskLevel.FORBIDDEN, handler=forbidden_handler))
     ctx = ExecutionContext("s1", "t1", "u1", "r1")
     with pytest.raises(ToolDenied):
         await executor.execute("forbidden_tool", context=ctx)
@@ -56,7 +56,7 @@ async def test_tool_executor_privileged_denied():
     async def privileged_handler():
         return "admin"
 
-    executor.register(ToolDefinition("privileged_tool", RiskLevel.PRIVILEGED, privileged_handler))
+    executor.register(ToolDefinition("privileged_tool", RiskLevel.PRIVILEGED, handler=privileged_handler))
     ctx = ExecutionContext("s1", "t1", "u1", "r1")
     with pytest.raises(ToolDenied):
         await executor.execute("privileged_tool", context=ctx)

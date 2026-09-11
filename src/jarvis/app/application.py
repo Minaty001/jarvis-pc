@@ -28,9 +28,24 @@ class Application:
             confirmation_secret=self.settings.confirmation_secret,
         )
 
+        from jarvis.brain.agent import build_agent
+        self.agent = build_agent(
+            self.executor,
+            confirmation_secret=self.settings.confirmation_secret,
+        )
+        self.memory = self.agent.memory
+        self.tools = self.registry
+
+        from jarvis.api.app import create_api_app
+        self.api = create_api_app(self.executor, agent=self.agent)
+
+        from jarvis.scheduler import SchedulerManager
+        self.scheduler = SchedulerManager()
+
+        from jarvis.proactive import ProactiveEngine
+        self.proactive = ProactiveEngine(settings=self.settings)
+
         self.voice: Any = None
-        self.scheduler: Any = None
-        self.api: Any = None
 
         self._started: bool = False
         self._stopping: bool = False
@@ -45,7 +60,7 @@ class Application:
             return
 
         logger.info("Starting JARVIS application")
-        components = [self.scheduler, self.voice, self.api]
+        components = [self.scheduler, self.proactive, self.voice, self.api]
         started_components: list[Any] = []
 
         try:
@@ -74,7 +89,7 @@ class Application:
         logger.info("Stopping JARVIS application")
         errors: list[Exception] = []
 
-        for component in (self.api, self.voice, self.scheduler):
+        for component in (self.api, self.voice, self.proactive, self.scheduler):
             if component is None:
                 continue
             if hasattr(component, "stop") and callable(component.stop):

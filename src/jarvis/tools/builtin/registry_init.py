@@ -7,9 +7,10 @@ from jarvis.tools.registry import ToolRegistry
 def register_all_builtins(registry: ToolRegistry) -> None:
     """Register every builtin tool into the given registry."""
     from jarvis.tools.builtin.filesystem import SafeFileStore
-    from jarvis.tools.builtin.applications import open_application
+    from jarvis.tools.builtin.applications import open_application, open_url
     from jarvis.tools.builtin.processes import find_processes
-    from jarvis.tools.builtin.media import check_camera_permissions
+    from jarvis.tools.builtin.media import check_camera_permissions, play_song
+    from jarvis.tools.builtin.browser import browse_web
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -34,6 +35,12 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         handler=open_application,
     ))
     registry.register(ToolDefinition(
+        name="open_url",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"desktop.applications"}),
+        handler=open_url,
+    ))
+    registry.register(ToolDefinition(
         name="find_processes",
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"system.read"}),
@@ -44,4 +51,16 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"media.camera"}),
         handler=check_camera_permissions,
+    ))
+    registry.register(ToolDefinition(
+        name="play_song",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"media.playback"}),
+        handler=play_song,
+    ))
+    registry.register(ToolDefinition(
+        name="browse_web",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"network.read"}),
+        handler=browse_web,
     ))

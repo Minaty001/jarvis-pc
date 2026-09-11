@@ -28,6 +28,14 @@ def test_settings_defaults(monkeypatch):
     get_settings.cache_clear()
 
 
+def test_settings_llm_key_from_groq(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test-key")
+    get_settings.cache_clear()
+    settings = get_settings()
+    assert settings.llm_api_key == "gsk_test-key"
+    get_settings.cache_clear()
+
+
 def test_settings_env_overrides(monkeypatch):
     monkeypatch.setenv("JARVIS_ENVIRONMENT", "staging")
     monkeypatch.setenv("JARVIS_HOST", "0.0.0.0")

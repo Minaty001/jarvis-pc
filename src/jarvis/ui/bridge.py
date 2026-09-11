@@ -1,0 +1,169 @@
+"""JARVIS UI Bridge — Connects Asyncio Core Application to GTK Main Loop."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import threading
+from typing import Callable, Optional, Dict, Any
+
+try:
+    import gi
+    gi.require_version("Gtk", "3.0")
+    from gi.repository import GLib
+    GTK_AVAILABLE = True
+except (ImportError, ValueError):
+    GTK_AVAILABLE = False
+    GLib = None  # type: ignore
+
+import psutil
+
+logger = logging.getLogger(__name__)
+
+
+class UIBridge:
+    """Thread-safe bridge between the async agent loop and the GTK event loop."""
+
+    def __init__(self, app_core=None):
+        self.app_core = app_core
+        self.agent = getattr(app_core, "agent", None)
+        self.tools = getattr(app_core, "tools", None)
+        self.memory = getattr(app_core, "memory", None)
+
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._thread: Optional[threading.Thread] = None
+        self._running = False
+        self._poll_timer_id = None
+
+        # UI Callback hooks
+        self.on_orb_state: Optional[Callable[[str], None]] = None
+        self.on_status: Optional[Callable[[str], None]] = None
+        self.on_chat: Optional[Callable[[str, str], None]] = None
+        self.on_system: Optional[Callable[[Dict[str, Any]], None]] = None
+        self.on_tools: Optional[Callable[[str], None]] = None
+        self.on_memory: Optional[Callable[[str], None]] = None
+
+    def start(self) -> None:
+        """Start the background bridge thread and system monitor timer."""
+        self._running = True
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._run_event_loop, daemon=True, name="jarvis-ui-bridge")
+        self._thread.start()
+
+        if GTK_AVAILABLE and GLib:
+            self._poll_timer_id = GLib.timeout_add(1500, self._poll_metrics)
+            # Initial load of tools & memory
+            GLib.idle_add(self._load_subsystems_summary)
+
+    def stop(self) -> None:
+        """Stop background tasks."""
+        self._running = False
+        if self._poll_timer_id and GTK_AVAILABLE and GLib:
+            GLib.source_remove(self._poll_timer_id)
+            self._poll_timer_id = None
+        if self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+
+    def _run_event_loop(self) -> None:
+        if not self._loop:
+            return
+        asyncio.set_event_loop(self._loop)
+        try:
+            self._loop.run_forever()
+        except Exception as exc:
+            logger.error("Error in UI bridge event loop: %s", exc)
+
+    def _poll_metrics(self) -> bool:
+        """Periodic 1.5s check for CPU, RAM and Disk metrics."""
+        if not self._running:
+            return False
+        try:
+            cpu = psutil.cpu_percent(interval=None)
+            ram = psutil.virtual_memory().percent
+            disk = psutil.disk_usage("/").percent
+            metrics = {
+                "cpu_percent": cpu,
+                "ram_percent": ram,
+                "disk_percent": disk,
+            }
+            if self.on_system:
+                self.on_system(metrics)
+        except Exception as exc:
+            logger.debug("System polling error: %s", exc)
+        return True
+
+    def _load_subsystems_summary(self) -> bool:
+        """Populate initial tools and memory catalog."""
+        try:
+            # Tools
+            if self.tools:
+                defs = self.tools.list_tools() if hasattr(self.tools, "list_tools") else []
+                lines = ["REGISTERED TOOLS & CAPABILITIES:\n" + "=" * 32]
+                for td in defs:
+                    lines.append(f"• {td.name} [{td.risk_level.value.upper()}]\n  {td.description}\n")
+                if self.on_tools:
+                    self.on_tools("\n".join(lines))
+
+            # Memory
+            if self.memory:
+                episodes = self.memory.recent(limit=10) if hasattr(self.memory, "recent") else []
+                lines = ["RECENT MEMORY EPISODES (SQLite FTS5):\n" + "=" * 32]
+                for ep in episodes:
+                    lines.append(f"[{ep.get('category', 'general')}] {ep.get('content', '')}")
+                if self.on_memory:
+                    self.on_memory("\n\n".join(lines) if episodes else "No memory episodes recorded yet.")
+        except Exception as exc:
+            logger.debug("Error loading initial subsystems: %s", exc)
+        return False
+
+    def send_chat(self, text: str) -> None:
+        """Schedule processing of user chat text asynchronously."""
+        if not self._loop or not self._loop.is_running():
+            logger.warning("Event loop not running, cannot process chat.")
+            return
+        asyncio.run_coroutine_threadsafe(self._async_handle_chat(text), self._loop)
+
+    async def _async_handle_chat(self, text: str) -> None:
+        self._notify_ui_orb("thinking")
+        self._notify_ui_status("PROCESSING GOAL...")
+
+        reply_text = ""
+        try:
+            if self.agent and hasattr(self.agent, "run_goal"):
+                # Run complete goal planner + verifier
+                res = await self.agent.run_goal(text)
+                reply_text = res.get("reply", "Goal executed successfully.")
+            elif self.agent and hasattr(self.agent, "step"):
+                reply_text = await self.agent.step(text)
+            else:
+                reply_text = f"JARVIS received: '{text}'. Core agent is active in mock mode."
+        except Exception as exc:
+            logger.error("Error executing goal in UI bridge: %s", exc, exc_info=True)
+            reply_text = f"An error occurred while processing: {exc}"
+            self._notify_ui_orb("error")
+        else:
+            self._notify_ui_orb("speaking")
+
+        # Send response bubble
+        self._notify_ui_chat("assistant", reply_text)
+
+        # Re-fetch memory after response
+        if GTK_AVAILABLE and GLib:
+            GLib.idle_add(self._load_subsystems_summary)
+
+        # Reset orb state back to idle after brief pause
+        await asyncio.sleep(1.2)
+        self._notify_ui_orb("idle")
+        self._notify_ui_status("STATE: READY")
+
+    def _notify_ui_orb(self, state: str) -> None:
+        if GTK_AVAILABLE and GLib and self.on_orb_state:
+            GLib.idle_add(self.on_orb_state, state)
+
+    def _notify_ui_status(self, text: str) -> None:
+        if GTK_AVAILABLE and GLib and self.on_status:
+            GLib.idle_add(self.on_status, text)
+
+    def _notify_ui_chat(self, role: str, text: str) -> None:
+        if GTK_AVAILABLE and GLib and self.on_chat:
+            GLib.idle_add(self.on_chat, role, text)

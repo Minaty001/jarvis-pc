@@ -82,108 +82,71 @@ Jarvis/
 
 ---
 
-## 🛠️ Step-by-Step Installation Guide (Linux Mint & Ubuntu)
+## 🛠️ Quick Installation Options (Direct Install Images)
 
-Follow these exact steps to set up and install JARVIS PC connected to the production cloud backend (`https://(render-url.onrender.com`):
+You can install and run JARVIS directly on Linux (Linux Mint, Ubuntu, Debian, etc.) using one of the prebuilt packages in `dist/`:
 
-### Step 1: Install System Dependencies
-Install required system packages for GTK3 desktop UI, PulseAudio/PipeWire audio capture, PortAudio, and FFmpeg:
-
+### 🚀 Option 1: Standalone AppImage (No Installation Required)
+Directly executable, completely portable single binary:
 ```bash
-sudo apt update && sudo apt install -y \
-    python3-venv python3-dev python3-gi \
-    libgtk-3-dev libgirepository1.0-dev \
-    pulseaudio portaudio19-dev ffmpeg desktop-file-utils
+chmod +x dist/JARVIS-x86_64.AppImage
+./dist/JARVIS-x86_64.AppImage
 ```
 
-### Step 2: Create Virtual Environment & Install Python Packages
-Navigate to the project root directory, create a Python virtual environment, upgrade pip, and install all required packages:
-
+### 📦 Option 2: Debian Package (.deb) (Linux Mint / Ubuntu Native)
+Native system integration with Application Menu entry, desktop icon, and systemd service:
 ```bash
-cd /home/shanu/Desktop/Jarvis
-
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install core dependencies & openWakeWord ONNX wake word engine
-pip install --upgrade pip
-pip install -r requirements.txt
-pip install openwakeword
-pip install -e .
+sudo apt install ./dist/jarvis_1.0.0_all.deb
+# Or using dpkg:
+# sudo dpkg -i ./dist/jarvis_1.0.0_all.deb
 ```
 
-### Step 3: Environment Configuration (.env)
-Set up your environment variables. Ensure the `JARVIS_API_URL` is pointed to the live production cloud backend:
-
+### ⚡ Option 3: Self-Extracting Installer (.run)
+Automated single-file installer with diagnostics check:
 ```bash
-cp .env.example .env
-```
-
-Key configuration parameters inside `.env`:
-
-```env
-# Production Cloud Backend URL
-JARVIS_API_URL=https://jarvis-pc-7e8k.onrender.com
-
-# Primary LLM Key (Groq recommended)
-GROQ_API_KEY=gsk_your_groq_api_key_here
-
-# Voice Settings
-JARVIS_VOICE=en-US-GuyNeural
-JARVIS_WAKE_THRESHOLD=0.8
-```
-
-### Step 4: Install Desktop Launcher, Icon & Autostart Entry
-Run the automated desktop installer script. This registers JARVIS natively into the Linux Mint Application Menu and configures autostart:
-
-```bash
-source .venv/bin/activate
-python3 ui/install_desktop.py
-```
-
-Files installed:
-- **Application Menu Entry**: `~/.local/share/applications/jarvis.desktop`
-- **Launcher Binary**: `/home/shanu/Desktop/Jarvis/bin/jarvis-ui`
-- **Application Icon**: `~/.local/share/icons/hicolor/256x256/apps/jarvis.png`
-- **Autostart Config**: `~/.config/autostart/jarvis.desktop`
-
-### Step 5: Test Cloud Backend Connectivity & Launch
-Verify that the remote cloud backend is online and launch JARVIS:
-
-```bash
-# Verify backend connection
-curl -s https://jarvis-pc-7e8k.onrender.com/health
-
-# Launch live GTK Desktop Application
-python3 run.py
+chmod +x dist/jarvis-installer.run
+./dist/jarvis-installer.run
 ```
 
 ---
 
-## 🖥️ Running JARVIS
+## 🔨 Building Installer Images from Source
 
-### Desktop UI Mode (Default)
-
-When a GTK display is available (`DISPLAY` set), running `run.py` launches the native desktop app:
+Aap unified builder script ya `make` ka use karke distribution packages 1-command me build kar sakte hain:
 
 ```bash
-python3 run.py
+# Option A: Using make (Sabse easy)
+make build
+
+# Option B: Using unified builder script
+./scripts/build.sh all --verify
+
+# Specific target build:
+# make appimage   OR   ./scripts/build.sh appimage
+# make deb        OR   ./scripts/build.sh deb
+# make run-pkg    OR   ./scripts/build.sh run
 ```
+All outputs are generated into the `dist/` directory with automatic integrity verification.
 
-- **Main Window**: Features the animated ORB, real-time chat, and live system monitoring tabs.
-- **Floating ORB**: Stays on top of other desktop windows. Click it to toggle the main window visibility; drag it anywhere on your desktop.
-- **Voice Activation**: Say **"Hey Jarvis"** into your microphone to activate voice commands.
+---
 
-### Headless / CLI Mode
+## 💻 Running JARVIS
 
-To run JARVIS without a graphical interface (e.g. over SSH or on a server), pass `--no-ui` or `--headless`:
+After installation, the `jarvis` command is available system-wide:
 
 ```bash
-python3 run.py --no-ui
-```
+# Check system diagnostics & dependencies
+jarvis doctor
 
-In headless mode, JARVIS runs the text/voice cognitive pipeline and exposes the HTTP REST API on port `3000`.
+# Start the JARVIS assistant service
+jarvis run
+
+# Execute an autonomous multi-step goal
+jarvis goal "Check system health and notify me"
+
+# Check background daemon status
+jarvis status
+```
 
 ---
 

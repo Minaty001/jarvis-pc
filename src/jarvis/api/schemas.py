@@ -12,3 +12,12 @@ class ExecuteRequest(BaseModel):
 class ExecuteResponse(BaseModel):
     ok: bool
     result: Any = None
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    session_id: str | None = None
+
+
+class ChatResponse(BaseModel):
+    reply: str

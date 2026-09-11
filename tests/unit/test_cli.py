@@ -20,11 +20,21 @@ def test_cli_status_subcommand(capsys):
     assert "Status" in captured.out
 
 
-def test_cli_run_subcommand(capsys):
+def test_cli_run_subcommand(monkeypatch, capsys):
+    from types import SimpleNamespace
     from unittest.mock import AsyncMock
-    from jarvis.app.application import Application
-    mock_app = AsyncMock(spec=Application)
+
+    mock_app = AsyncMock()
+    mock_agent = AsyncMock()
+    mock_agent.respond.return_value = "At your command, sir."
+    mock_app.agent = mock_agent
+    mock_app.settings = SimpleNamespace(confirmation_secret=None)
+
+    script = ["hello", "exit"]
+    monkeypatch.setattr("builtins.input", lambda prompt: script.pop(0))
+
     run_cli(["run"], app=mock_app)
     captured = capsys.readouterr()
     assert "Starting JARVIS" in captured.out
-    mock_app.run_until_stopped.assert_called_once()
+    assert "At your command, sir." in captured.out
+    mock_agent.respond.assert_called_once_with("hello", session_id="cli")

@@ -2,7 +2,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from jarvis.api.auth import verify_auth
-from jarvis.api.schemas import ExecuteRequest, ExecuteResponse
+from jarvis.api.schemas import ChatRequest, ChatResponse, ExecuteRequest, ExecuteResponse
 from jarvis.tools.executor import ConfirmationRequired, ToolDenied, ToolExecutor
 from jarvis.tools.rate_limit import RateLimitExceeded
 from jarvis.cognitive.context import ExecutionContext
@@ -10,8 +10,9 @@ from jarvis.cognitive.context import ExecutionContext
 import uuid
 
 
-def create_api_app(executor: ToolExecutor) -> FastAPI:
+def create_api_app(executor: ToolExecutor, agent=None) -> FastAPI:
     """Factory: create FastAPI app with injected executor."""
+    chat_agent = agent
     api = FastAPI(title="JARVIS API", version="1.0.0")
 
     @api.middleware("http")
@@ -66,9 +67,20 @@ def create_api_app(executor: ToolExecutor) -> FastAPI:
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"unknown tool: {request.tool}") from exc
 
+    @api.post("/chat", response_model=ChatResponse)
+    async def chat(request: ChatRequest, _: None = Depends(verify_auth)):
+        from jarvis.brain.agent import build_agent
+
+        nonlocal chat_agent
+        if chat_agent is None:
+            chat_agent = build_agent(executor)
+        try:
+            reply = await chat_agent.respond(request.message, session_id=request.session_id)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"brain failure: {exc}",
+            ) from exc
+        return ChatResponse(reply=reply)
+
     return api
-
-
-# Backward-compatible module-level app for tests that import `from jarvis.api.app import app`
-# This uses an empty executor — real runtime should use create_api_app()
-app = create_api_app(ToolExecutor())

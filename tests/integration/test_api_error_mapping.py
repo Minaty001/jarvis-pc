@@ -41,7 +41,7 @@ def test_tool_denied_returns_403(api_components):
     executor.register(
         ToolDefinition(
             name="forbidden_tool",
-            risk_level=RiskLevel.FORBIDDEN,
+            risk=RiskLevel.FORBIDDEN,
             handler=forbidden_handler,
         )
     )
@@ -60,7 +60,7 @@ def test_confirmation_required_returns_409(api_components):
     executor.register(
         ToolDefinition(
             name="sensitive_tool",
-            risk_level=RiskLevel.CONFIRM,
+            risk=RiskLevel.CONFIRM,
             handler=sensitive_handler,
         )
     )
@@ -79,7 +79,7 @@ def test_rate_limit_exceeded_returns_429(monkeypatch, api_components):
     executor.register(
         ToolDefinition(
             name="limited_tool",
-            risk_level=RiskLevel.SAFE,
+            risk=RiskLevel.SAFE,
             handler=limited_handler,
         )
     )
@@ -103,7 +103,7 @@ def test_value_error_returns_400(api_components):
     executor.register(
         ToolDefinition(
             name="value_error_tool",
-            risk_level=RiskLevel.SAFE,
+            risk=RiskLevel.SAFE,
             handler=invalid_args_handler,
         )
     )

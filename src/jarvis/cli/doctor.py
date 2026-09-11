@@ -11,19 +11,23 @@ from jarvis.system.paths import get_app_paths
 
 def _check_xdg_path(path: Path) -> tuple[str, bool]:
     """Perform empirical read/write file check on an XDG directory."""
+    test_file = path / ".doctor_test"
     try:
         path.mkdir(parents=True, exist_ok=True)
-        test_file = path / ".doctor_test"
         test_content = "jarvis_doctor_check"
         test_file.write_text(test_content)
         read_back = test_file.read_text()
-        if test_file.exists():
-            test_file.unlink()
         if read_back == test_content:
             return "OK", True
         return "FAIL (readback mismatch)", False
     except Exception as exc:
         return f"FAIL ({exc})", False
+    finally:
+        if test_file.exists():
+            try:
+                test_file.unlink()
+            except OSError:
+                pass
 
 
 def run_doctor() -> str:

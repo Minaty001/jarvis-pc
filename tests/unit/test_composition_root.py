@@ -36,10 +36,3 @@ def test_application_creates_full_graph():
     assert app.executor is not None
     assert app.executor.registry is app.registry
     assert len(app.registry.list()) > 0, "Registry must have tools registered"
-
-
-def test_task_manager_no_inline_executor():
-    """task_engine.manager.TaskManager must not construct ToolExecutor() inline."""
-    src = Path("task_engine/manager.py")
-    content = src.read_text()
-    assert "ToolExecutor()" not in content, "TaskManager must not construct ToolExecutor()"

@@ -45,7 +45,7 @@ def test_execute_endpoint_success(monkeypatch, api_components):
     executor.register(
         ToolDefinition(
             name="sample_tool",
-            risk_level=RiskLevel.SAFE,
+            risk=RiskLevel.SAFE,
             handler=sample_tool,
         )
     )
@@ -72,7 +72,7 @@ def test_execute_endpoint_auth_required(monkeypatch, api_components):
     executor.register(
         ToolDefinition(
             name="dummy_tool",
-            risk_level=RiskLevel.SAFE,
+            risk=RiskLevel.SAFE,
             handler=dummy_tool,
         )
     )
@@ -101,5 +101,24 @@ def test_execute_endpoint_auth_required(monkeypatch, api_components):
         )
         assert response.status_code == 200
         assert response.json()["result"] == "auth_ok"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_chat_endpoint(monkeypatch):
+    monkeypatch.setenv("JARVIS_ENVIRONMENT", "development")
+    get_settings.cache_clear()
+
+    class FakeAgent:
+        async def respond(self, message, session_id=None):
+            return f"Reply to {message}, sir."
+
+    try:
+        executor = ToolExecutor()
+        app = create_api_app(executor, agent=FakeAgent())
+        client = TestClient(app)
+        response = client.post("/chat", json={"message": "hello"})
+        assert response.status_code == 200
+        assert response.json()["reply"] == "Reply to hello, sir."
     finally:
         get_settings.cache_clear()

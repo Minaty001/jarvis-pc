@@ -1,4 +1,4 @@
-# Production Dockerfile for JARVIS Backend API on Render.com / Cloud Containers
+# Production Dockerfile for JARVIS Assistant
 FROM python:3.12-slim
 
 # Prevent Python from writing .pyc files and buffer outputs
@@ -21,22 +21,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install Python dependencies
-COPY requirements.txt .
+COPY requirements.txt pyproject.toml /app/
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . /app/
+RUN pip install --no-cache-dir -e .
 
 # Create data directory
 RUN mkdir -p /var/data
 
 # Expose default port
-EXPOSE 10000
+EXPOSE 8000 10000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-10000}/health || exit 1
+  CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-# Start production API server
-CMD ["python", "render_app.py"]
+# Start JARVIS
+CMD ["jarvis", "run"]
