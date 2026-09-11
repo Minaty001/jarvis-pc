@@ -105,6 +105,40 @@ TOOL_SPECS: dict[str, dict[str, Any]] = {
             },
         },
     },
+    "take_screenshot": {
+        "description": "Capture the full computer desktop screen and save as an image. Requires user confirmation.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "output_path": {"type": "string", "description": "Destination image file path inside home directory (e.g. ~/Pictures/screen.png). Optional."},
+            },
+        },
+    },
+    "get_active_window": {
+        "description": "Get information about the currently focused desktop window and application.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    "list_open_windows": {
+        "description": "List all open desktop application windows across workspaces.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    "analyze_image": {
+        "description": "Analyze an image (photo, screenshot, or diagram) using computer vision. Describe contents, read text, or answer questions about it.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "image_path": {"type": "string", "description": "Path to the image file to analyze (within home directory)."},
+                "prompt": {"type": "string", "description": "Question or prompt regarding the image content."},
+            },
+            "required": ["image_path"],
+        },
+    },
     "play_song": {
         "description": "Find and open the top YouTube result for a song or music request, ready to play. Requires confirmation.",
         "parameters": {

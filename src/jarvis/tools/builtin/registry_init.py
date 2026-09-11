@@ -11,6 +11,8 @@ def register_all_builtins(registry: ToolRegistry) -> None:
     from jarvis.tools.builtin.processes import find_processes
     from jarvis.tools.builtin.media import check_camera_permissions, play_song
     from jarvis.tools.builtin.camera import list_cameras, take_photo
+    from jarvis.tools.builtin.screen import take_screenshot, get_active_window, list_open_windows
+    from jarvis.tools.builtin.vision import analyze_image
     from jarvis.tools.builtin.browser import browse_web
     from pathlib import Path
 
@@ -64,6 +66,30 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.CONFIRM,
         capabilities=frozenset({"media.camera"}),
         handler=take_photo,
+    ))
+    registry.register(ToolDefinition(
+        name="take_screenshot",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"desktop.screen"}),
+        handler=take_screenshot,
+    ))
+    registry.register(ToolDefinition(
+        name="get_active_window",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"system.read"}),
+        handler=get_active_window,
+    ))
+    registry.register(ToolDefinition(
+        name="list_open_windows",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"system.read"}),
+        handler=list_open_windows,
+    ))
+    registry.register(ToolDefinition(
+        name="analyze_image",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"media.vision"}),
+        handler=analyze_image,
     ))
     registry.register(ToolDefinition(
         name="play_song",

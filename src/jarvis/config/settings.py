@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     local_llm_base_url: str = "http://localhost:11434/v1"
     local_llm_model: str = "qwen2.5:7b"
     local_llm_timeout: float = Field(default=30.0, ge=1.0, le=300.0)
+    vision_model: str = "llama-3.2-11b-vision-preview"
+    local_vision_model: str = "llama3.2-vision"
 
 
 @lru_cache

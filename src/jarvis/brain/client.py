@@ -8,9 +8,11 @@ configured, so the assistant still functions offline.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -125,6 +127,8 @@ class LLMClient:
         local_model: str = "qwen2.5:7b",
         local_enabled: bool = True,
         local_timeout: float = 30.0,
+        vision_model: str = "llama-3.2-11b-vision-preview",
+        local_vision_model: str = "llama3.2-vision",
     ) -> None:
         self.base_url = base_url.rstrip("/") or DEFAULT_BASE_URL
         self.api_key = api_key or None
@@ -134,6 +138,8 @@ class LLMClient:
         self.local_model = local_model or "qwen2.5:7b"
         self.local_enabled = local_enabled
         self.local_timeout = local_timeout
+        self.vision_model = vision_model or "llama-3.2-11b-vision-preview"
+        self.local_vision_model = local_vision_model or "llama3.2-vision"
 
     @property
     def available(self) -> bool:
@@ -153,6 +159,8 @@ class LLMClient:
             local_model=settings.local_llm_model,
             local_enabled=settings.local_llm_enabled,
             local_timeout=settings.local_llm_timeout,
+            vision_model=settings.vision_model,
+            local_vision_model=settings.local_vision_model,
         )
 
     async def _call_openai_endpoint(
@@ -291,3 +299,83 @@ class LLMClient:
             status["active_mode"] = "offline_brain"
 
         return status
+
+    async def analyze_image(
+        self,
+        image_path: str | Path,
+        prompt: str = "Describe what you see in this image in detail, noting any text, UI elements, or objects.",
+    ) -> str:
+        """Analyze an image file using multimodal vision capabilities."""
+        path = Path(image_path).expanduser().resolve()
+        if not path.exists():
+            raise FileNotFoundError(f"Image file '{image_path}' does not exist.")
+
+        ext = path.suffix.lower()
+        mime_map = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+        }
+        mime_type = mime_map.get(ext, "image/jpeg")
+
+        image_bytes = path.read_bytes()
+        b64_encoded = base64.b64encode(image_bytes).decode("utf-8")
+        data_url = f"data:{mime_type};base64,{b64_encoded}"
+
+        vision_messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            }
+        ]
+
+        # 1. Cloud Vision
+        if self.available:
+            try:
+                result = await self._call_openai_endpoint(
+                    base_url=self.base_url,
+                    model=self.vision_model,
+                    api_key=self.api_key,
+                    messages=vision_messages,
+                    tools=None,
+                    max_tokens=1000,
+                    timeout=self.timeout,
+                    retry=True,
+                )
+                if result.content:
+                    return result.content
+            except Exception as exc:
+                logger.warning("Cloud vision call failed (%s). Attempting local vision fallback...", exc)
+
+        # 2. Local Vision fallback
+        if self.local_enabled:
+            try:
+                logger.info(
+                    "Attempting local vision analysis with %s at %s...",
+                    self.local_vision_model,
+                    self.local_base_url,
+                )
+                result = await self._call_openai_endpoint(
+                    base_url=self.local_base_url,
+                    model=self.local_vision_model,
+                    api_key=None,
+                    messages=vision_messages,
+                    tools=None,
+                    max_tokens=1000,
+                    timeout=self.local_timeout,
+                    retry=False,
+                )
+                if result.content:
+                    return result.content
+            except Exception as exc:
+                logger.warning("Local vision fallback failed: %s", exc)
+
+        return (
+            "Vision analysis is currently unavailable, sir. Neither the cloud vision model "
+            f"('{self.vision_model}') nor the local vision model ('{self.local_vision_model}') could be reached."
+        )

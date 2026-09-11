@@ -106,6 +106,19 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     llm_sub = llm_parser.add_subparsers(dest="llm_action", help="LLM action")
     llm_sub.add_parser("status", help="Check Cloud and Local Ollama endpoint health")
 
+    screen_parser = subparsers.add_parser("screen", help="Screen capture and window awareness")
+    screen_sub = screen_parser.add_subparsers(dest="screen_action", help="Screen action")
+    screen_snap = screen_sub.add_parser("snap", help="Take a full desktop screenshot")
+    screen_snap.add_argument("--output", default=None, help="Output image path (default: ~/Pictures/...)")
+    screen_sub.add_parser("active", help="Get currently focused active window")
+    screen_sub.add_parser("list", help="List all open desktop windows")
+
+    vision_parser = subparsers.add_parser("vision", help="Multimodal vision analysis")
+    vision_sub = vision_parser.add_subparsers(dest="vision_action", help="Vision action")
+    vis_an = vision_sub.add_parser("analyze", help="Analyze an image file using computer vision")
+    vis_an.add_argument("image_path", help="Path to image file")
+    vis_an.add_argument("--prompt", default="Describe what you see in this image in detail.", help="Question or prompt")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
@@ -168,6 +181,66 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
             return 0
         else:
             print("Usage: jarvis llm status")
+            return 1
+
+    if parsed_args.subcommand == "screen":
+        from jarvis.tools.builtin.screen import take_screenshot, get_active_window, list_open_windows
+
+        if parsed_args.screen_action == "snap":
+            try:
+                res = asyncio.run(take_screenshot(output_path=parsed_args.output))
+                print(res)
+                return 0
+            except Exception as exc:
+                print(f"Failed to capture screenshot: {exc}")
+                return 1
+        elif parsed_args.screen_action == "active":
+            info = asyncio.run(get_active_window())
+            if "error" in info:
+                print(f"Active window query: {info['error']}")
+            else:
+                print("\nCurrently Active Window:")
+                print("-" * 50)
+                print(f"• Title:       {info.get('title')}")
+                print(f"• Application: {info.get('app_class')}")
+                print(f"• Window ID:   {info.get('window_id')}")
+                print("-" * 50)
+            return 0
+        elif parsed_args.screen_action == "list":
+            windows = asyncio.run(list_open_windows())
+            if not windows:
+                print("No open application windows detected.")
+            else:
+                print(f"\nOpen Windows ({len(windows)}):")
+                print("-" * 65)
+                for w in windows:
+                    print(f"• {w['window_id']:<12} | {w['app_class']:<25} | {w['title']}")
+                print("-" * 65)
+            return 0
+        else:
+            print("Usage: jarvis screen {snap|active|list}")
+            return 1
+
+    if parsed_args.subcommand == "vision":
+        from jarvis.tools.builtin.vision import analyze_image
+
+        if parsed_args.vision_action == "analyze":
+            application = app if app is not None else Application()
+            client = getattr(application.agent, "client", None)
+            try:
+                reply = asyncio.run(
+                    analyze_image(parsed_args.image_path, prompt=parsed_args.prompt, client=client)
+                )
+                print(f"\nJARVIS Visual Analysis:")
+                print("-" * 65)
+                print(reply)
+                print("-" * 65)
+                return 0
+            except Exception as exc:
+                print(f"Visual analysis failed: {exc}")
+                return 1
+        else:
+            print("Usage: jarvis vision analyze <image_path> [--prompt ...]")
             return 1
 
     if parsed_args.subcommand == "telegram":
