@@ -256,6 +256,12 @@ class LLMClient:
                 local_res = await self._try_local_fallback(messages, tools, max_tokens)
                 if local_res is not None:
                     return local_res
+                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+                    reply = (
+                        "I have temporarily exceeded the Groq cloud rate limit (HTTP 429: Too Many Requests). "
+                        "Local LLM fallback is currently offline. Please wait a few moments before retrying, or launch Ollama for offline capability, sir."
+                    )
+                    return ChatResult(content=reply, tool_calls=[], stop_reason="stop")
                 return await LocalBrain(self.model).chat(messages, tools)
 
         # Case 2: Cloud API key is not configured — try local LLM directly

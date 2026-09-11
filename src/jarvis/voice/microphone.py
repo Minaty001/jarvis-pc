@@ -22,13 +22,16 @@ class Microphone:
         self._queue: "queue.Queue[np.ndarray]" = queue.Queue()
 
     def _callback(self, indata, frames, time_info, status):
-        self._queue.put(indata.copy())
+        if isinstance(indata, np.ndarray):
+            self._queue.put(indata.copy())
+        else:
+            self._queue.put(np.frombuffer(indata, dtype=np.int16).copy())
 
     def iter_chunks(self, level_callback: Optional[Callable[[float], None]] = None):
         """Yield int16 mono (chunk,) arrays until the stream is closed."""
         import sounddevice as sd
 
-        stream = sd.RawInputStream(
+        stream = sd.InputStream(
             samplerate=RATE, channels=1, dtype="int16", blocksize=CHUNK, callback=self._callback
         )
         stream.start()
