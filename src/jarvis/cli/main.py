@@ -291,6 +291,24 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     sw_cancel = swarm_sub.add_parser("cancel", help="Cancel a running swarm worker")
     sw_cancel.add_argument("id", help="Swarm task ID")
 
+    net_parser = subparsers.add_parser("network", help="Local Network Intelligence, IoT Device Discovery & Wake-on-LAN Hub")
+    net_sub = net_parser.add_subparsers(dest="network_action", help="Network action")
+
+    net_scan = net_sub.add_parser("scan", help="Scan local subnet for connected IoT devices, smart hubs, and workstations")
+    net_scan.add_argument("--subnet", default="", help="Subnet base (e.g. '192.168.1')")
+    net_scan.add_argument("--limit", type=int, default=30, help="Max hosts to scan")
+
+    net_ping = net_sub.add_parser("ping", help="Ping a target host or IP for latency and jitter")
+    net_ping.add_argument("host", help="Hostname or IP address")
+    net_ping.add_argument("-c", "--count", type=int, default=3, help="Number of packets")
+
+    net_wol = net_sub.add_parser("wol", help="Send Wake-on-LAN magic packet")
+    net_wol.add_argument("mac", help="Target MAC address (e.g. 00:11:22:33:44:55)")
+    net_wol.add_argument("--broadcast", default="255.255.255.255", help="Broadcast IP (default: 255.255.255.255)")
+
+    net_sub.add_parser("bench", help="Run comprehensive network latency and speed benchmark")
+    net_sub.add_parser("devices", help="List cached local network devices")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
@@ -1050,6 +1068,90 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
 
         else:
             print("Usage: jarvis swarm {list|spawn|show|cancel}")
+            return 1
+
+    if parsed_args.subcommand == "network":
+        from jarvis.network.hub import get_network_hub
+
+        hub = get_network_hub()
+        action = parsed_args.network_action
+
+        if action == "scan":
+            print("\n[JARVIS Network Hub] Scanning local subnet for connected IoT & network devices...")
+            devices = asyncio.run(hub.scan_network(subnet_base=parsed_args.subnet, max_hosts=parsed_args.limit))
+            if not devices:
+                print("No network devices discovered on the subnet.\n")
+                return 0
+
+            print(f"\nDiscovered {len(devices)} Local Device(s):")
+            print("=" * 80)
+            print(f"{'IP ADDRESS':<16} | {'MAC ADDRESS':<18} | {'DEVICE TYPE / VENDOR':<26} | {'OPEN PORTS'}")
+            print("-" * 80)
+            for d in devices:
+                ports_str = ",".join(str(p) for p in d.open_ports) if d.open_ports else "none"
+                type_str = f"{d.device_type} ({d.vendor})" if d.vendor != "Unknown Vendor" else d.device_type
+                if len(type_str) > 26:
+                    type_str = type_str[:23] + "..."
+                print(f"{d.ip:<16} | {d.mac:<18} | {type_str:<26} | {ports_str}")
+            print("=" * 80 + "\n")
+            return 0
+
+        elif action == "ping":
+            res = hub.ping(parsed_args.host, count=parsed_args.count)
+            if not res["reachable"]:
+                print(f"\nHost '{parsed_args.host}' is UNREACHABLE (100% packet loss).\n")
+                return 1
+
+            print(f"\nPing statistics for {res['host']}:")
+            print("=" * 55)
+            print("• Status:      ONLINE")
+            print(f"• Avg Latency: {res['avg_ms']} ms (min: {res['min_ms']} ms, max: {res['max_ms']} ms)")
+            print(f"• Jitter:      {res['jitter_ms']} ms")
+            print(f"• Packet Loss: {res['packet_loss_percent']}%")
+            print("=" * 55 + "\n")
+            return 0
+
+        elif action == "wol":
+            ok = hub.wake_on_lan(parsed_args.mac, broadcast_ip=parsed_args.broadcast)
+            if ok:
+                print(f"\n[WoL] Magic packet successfully sent to {parsed_args.mac} (broadcast: {parsed_args.broadcast})\n")
+                return 0
+            print(f"\n[WoL] Failed to transmit packet to {parsed_args.mac}\n")
+            return 1
+
+        elif action == "bench":
+            print("\n[JARVIS Network Hub] Running network diagnostics and latency benchmark...")
+            bench = asyncio.run(hub.benchmark())
+            status_str = "ONLINE" if bench["online"] else "OFFLINE"
+            print("\n" + "=" * 60)
+            print("JARVIS Network Diagnostic Report:")
+            print("-" * 60)
+            print(f"• Connectivity Status: {status_str}")
+            print(f"• Overall Quality:     {bench['quality_score']}")
+            print(f"• WAN Latency:         {bench['avg_latency_ms']} ms")
+            print(f"• Jitter:              {bench['jitter_ms']} ms")
+            print(f"• Packet Loss:         {bench['packet_loss_percent']}%")
+            print(f"• DNS Resolution:      {bench['dns_lookup_ms']} ms ({bench['dns_status']})")
+            if bench.get("http_rtt_ms") is not None:
+                print(f"• HTTP Roundtrip:      {bench['http_rtt_ms']} ms")
+            print("=" * 60 + "\n")
+            return 0
+
+        elif action == "devices":
+            devices = hub.list_devices()
+            if not devices:
+                print("\nNo cached devices found in local registry. Run 'jarvis network scan' first.\n")
+                return 0
+
+            print(f"\nJARVIS Known Network Devices ({len(devices)} registered):")
+            print("=" * 80)
+            for d in devices:
+                print(f"• {d.ip:<15} [{d.mac}] | {d.device_type} ({d.vendor}) | Hostname: {d.hostname}")
+            print("=" * 80 + "\n")
+            return 0
+
+        else:
+            print("Usage: jarvis network {scan|ping|wol|bench|devices}")
             return 1
 
     if parsed_args.subcommand == "telegram":

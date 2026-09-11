@@ -86,6 +86,13 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         handle_list_swarm_tasks,
         handle_spawn_background_worker,
     )
+    from jarvis.tools.builtin.network_tools import (
+        benchmark_network_speed,
+        list_network_devices,
+        ping_network_host,
+        scan_local_network,
+        wake_on_lan,
+    )
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -492,4 +499,34 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.CONFIRM,
         capabilities=frozenset({"swarm.manage", "swarm.execute"}),
         handler=handle_decompose_swarm_goal,
+    ))
+    registry.register(ToolDefinition(
+        name="scan_local_network",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"network.read"}),
+        handler=scan_local_network,
+    ))
+    registry.register(ToolDefinition(
+        name="wake_on_lan",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"network.control"}),
+        handler=wake_on_lan,
+    ))
+    registry.register(ToolDefinition(
+        name="ping_network_host",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"network.read"}),
+        handler=ping_network_host,
+    ))
+    registry.register(ToolDefinition(
+        name="benchmark_network_speed",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"network.read"}),
+        handler=benchmark_network_speed,
+    ))
+    registry.register(ToolDefinition(
+        name="list_network_devices",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"network.read"}),
+        handler=list_network_devices,
     ))
