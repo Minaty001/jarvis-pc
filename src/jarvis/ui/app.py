@@ -76,6 +76,7 @@ class JarvisApp(Gtk.Application if GTK_AVAILABLE else object):  # type: ignore
         self.bridge.on_system = self.main_window.update_system
         self.bridge.on_tools = self.main_window.set_tools_summary
         self.bridge.on_memory = self.main_window.set_memory_summary
+        self.bridge.on_waveform = self.main_window.update_waveform
 
         # 4. Start Core Bridge
         self.bridge.start()

@@ -15,6 +15,7 @@ except (ImportError, ValueError):
     Gtk = object  # type: ignore
 
 from jarvis.ui.orb import OrbWidget
+from jarvis.ui.waveform import WaveformWidget
 
 logger = logging.getLogger(__name__)
 
@@ -74,10 +75,19 @@ class MainWindow(Gtk.Window if GTK_AVAILABLE else object):  # type: ignore
         orb_container.pack_start(self.orb, True, True, 8)
         left_panel.pack_start(orb_container, False, False, 0)
 
+        # Real-time Voice Waveform Visualizer
+        self.waveform = WaveformWidget(width=240, height=44, state="idle")
+        left_panel.pack_start(self.waveform, False, False, 0)
+
         # Status text
         self.lbl_status = Gtk.Label(label="STATE: READY")
         self.lbl_status.get_style_context().add_class("accent")
         left_panel.pack_start(self.lbl_status, False, False, 0)
+
+        # Voice Session Toggle Button
+        self.btn_voice = Gtk.Button(label="🎙️ Start Voice Session")
+        self.btn_voice.connect("clicked", self._on_toggle_voice)
+        left_panel.pack_start(self.btn_voice, False, False, 4)
 
         # Quick Actions
         lbl_actions = Gtk.Label(label="QUICK GOALS")
@@ -213,7 +223,28 @@ class MainWindow(Gtk.Window if GTK_AVAILABLE else object):  # type: ignore
         self.lbl_status.set_text(text)
 
     def set_orb_state(self, state: str) -> None:
-        self.orb.set_state(state)
+        if self.orb:
+            self.orb.set_state(state)
+        if hasattr(self, "waveform") and self.waveform:
+            self.waveform.set_state(state)
+
+    def update_waveform(self, level: float) -> None:
+        if hasattr(self, "waveform") and self.waveform:
+            self.waveform.feed_level(level)
+
+    def _on_toggle_voice(self, _button) -> None:
+        bridge = getattr(self.app, "bridge", None)
+        if bridge and hasattr(bridge, "toggle_voice_session"):
+            bridge.toggle_voice_session(on_active_change=self.set_voice_active)
+
+    def set_voice_active(self, active: bool) -> None:
+        if hasattr(self, "btn_voice"):
+            if active:
+                self.btn_voice.set_label("⏹️ Stop Voice Session")
+                self.btn_voice.get_style_context().add_class("destructive")
+            else:
+                self.btn_voice.set_label("🎙️ Start Voice Session")
+                self.btn_voice.get_style_context().remove_class("destructive")
 
     def add_chat(self, role: str, text: str) -> None:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)

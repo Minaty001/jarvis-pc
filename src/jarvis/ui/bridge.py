@@ -42,6 +42,101 @@ class UIBridge:
         self.on_system: Optional[Callable[[Dict[str, Any]], None]] = None
         self.on_tools: Optional[Callable[[str], None]] = None
         self.on_memory: Optional[Callable[[str], None]] = None
+        self.on_waveform: Optional[Callable[[float], None]] = None
+
+        self._voice_session_active = False
+        self._voice_thread: Optional[threading.Thread] = None
+
+    def feed_audio_level(self, level: float) -> None:
+        """Marshal audio energy level to the GTK thread for waveform display."""
+        if self.on_waveform and GTK_AVAILABLE and GLib:
+            try:
+                GLib.idle_add(self.on_waveform, level)
+            except Exception as exc:
+                logger.debug("Failed to dispatch audio level to waveform: %s", exc)
+
+    def toggle_voice_session(self, on_active_change: Optional[Callable[[bool], None]] = None) -> bool:
+        """Toggle interactive voice assistant session."""
+        if self._voice_session_active:
+            self._voice_session_active = False
+            if on_active_change and GTK_AVAILABLE and GLib:
+                GLib.idle_add(on_active_change, False)
+            if self.on_status and GTK_AVAILABLE and GLib:
+                GLib.idle_add(self.on_status, "Voice Session Stopped")
+            if self.on_orb_state and GTK_AVAILABLE and GLib:
+                GLib.idle_add(self.on_orb_state, "idle")
+            return False
+
+        self._voice_session_active = True
+        if on_active_change and GTK_AVAILABLE and GLib:
+            GLib.idle_add(on_active_change, True)
+        if self.on_status and GTK_AVAILABLE and GLib:
+            GLib.idle_add(self.on_status, "Voice Session Active")
+        if self.on_orb_state and GTK_AVAILABLE and GLib:
+            GLib.idle_add(self.on_orb_state, "listening")
+
+        self._voice_thread = threading.Thread(
+            target=self._run_voice_loop_worker,
+            daemon=True,
+            name="jarvis-voice-ui-worker",
+        )
+        self._voice_thread.start()
+        return True
+
+    def _run_voice_loop_worker(self) -> None:
+        """Worker thread running voice recognition with waveform feedback."""
+        from jarvis.voice.microphone import Microphone
+        from jarvis.voice.stt import transcribe_pcm
+        from jarvis.voice.tts import speak
+
+        mic = Microphone()
+        while self._voice_session_active and self._running:
+            try:
+                if self.on_orb_state and GTK_AVAILABLE and GLib:
+                    GLib.idle_add(self.on_orb_state, "listening")
+
+                pcm = mic.record_until_silence(level_callback=self.feed_audio_level)
+                if not self._voice_session_active or len(pcm) == 0:
+                    continue
+
+                if self.on_orb_state and GTK_AVAILABLE and GLib:
+                    GLib.idle_add(self.on_orb_state, "thinking")
+                if self.on_status and GTK_AVAILABLE and GLib:
+                    GLib.idle_add(self.on_status, "Transcribing speech...")
+
+                text = transcribe_pcm(pcm)
+                if not text or len(text.strip()) < 2:
+                    continue
+
+                if self.on_chat and GTK_AVAILABLE and GLib:
+                    GLib.idle_add(self.on_chat, "user", text)
+
+                reply = "I heard you, sir."
+                if self.agent and self._loop:
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.agent.respond(text, session_id="voice-ui"), self._loop
+                    )
+                    reply = future.result(timeout=45.0)
+
+                if self.on_chat and GTK_AVAILABLE and GLib:
+                    GLib.idle_add(self.on_chat, "assistant", reply)
+
+                if self.on_orb_state and GTK_AVAILABLE and GLib:
+                    GLib.idle_add(self.on_orb_state, "speaking")
+                if self.on_status and GTK_AVAILABLE and GLib:
+                    GLib.idle_add(self.on_status, "Speaking...")
+
+                speak(reply)
+
+                if self.on_orb_state and GTK_AVAILABLE and GLib:
+                    GLib.idle_add(self.on_orb_state, "listening")
+                if self.on_status and GTK_AVAILABLE and GLib:
+                    GLib.idle_add(self.on_status, "Voice Session Active")
+
+            except Exception as exc:
+                logger.warning("Voice worker error: %s", exc)
+                if not self._voice_session_active:
+                    break
 
     def start(self) -> None:
         """Start the background bridge thread and system monitor timer."""
@@ -58,6 +153,7 @@ class UIBridge:
     def stop(self) -> None:
         """Stop background tasks."""
         self._running = False
+        self._voice_session_active = False
         if self._poll_timer_id and GTK_AVAILABLE and GLib:
             GLib.source_remove(self._poll_timer_id)
             self._poll_timer_id = None
