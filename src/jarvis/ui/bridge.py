@@ -85,40 +85,61 @@ class UIBridge:
         return True
 
     def _run_voice_loop_worker(self) -> None:
-        """Worker thread running voice recognition with waveform feedback."""
+        """Worker thread running full-duplex voice recognition with barge-in interruption."""
         try:
+            from jarvis.voice.duplex import DuplexVoiceSession
             from jarvis.voice.microphone import Microphone
             from jarvis.voice.stt import transcribe_pcm
-            from jarvis.voice.tts import speak
+
+            def _safe_orb(state: str):
+                if self.on_orb_state and GTK_AVAILABLE and GLib:
+                    GLib.idle_add(self.on_orb_state, state)
+
+            def _safe_status(status_text: str):
+                if self.on_status and GTK_AVAILABLE and GLib:
+                    GLib.idle_add(self.on_status, status_text)
+
+            def _safe_chat(role: str, text: str):
+                if self.on_chat and GTK_AVAILABLE and GLib:
+                    GLib.idle_add(self.on_chat, role, text)
 
             mic = Microphone()
+            session = DuplexVoiceSession(
+                on_orb_state=_safe_orb,
+                on_status=_safe_status,
+                on_chat=_safe_chat,
+                on_level=self.feed_audio_level,
+            )
         except Exception as exc:
-            logger.error("Failed to initialize voice hardware or models: %s", exc, exc_info=True)
+            logger.error("Failed to initialize duplex voice session: %s", exc, exc_info=True)
             if self.on_status and GTK_AVAILABLE and GLib:
                 GLib.idle_add(self.on_status, f"Voice init error: {exc}")
             self._voice_session_active = False
             return
 
+        interrupted_pcm: Optional[Any] = None
+
         while self._voice_session_active and self._running:
             try:
-                if self.on_orb_state and GTK_AVAILABLE and GLib:
-                    GLib.idle_add(self.on_orb_state, "listening")
+                if interrupted_pcm is not None and len(interrupted_pcm) > 0:
+                    pcm = interrupted_pcm
+                    interrupted_pcm = None
+                else:
+                    _safe_orb("listening")
+                    _safe_status("Listening...")
+                    pcm = mic.record_until_silence(level_callback=self.feed_audio_level)
 
-                pcm = mic.record_until_silence(level_callback=self.feed_audio_level)
                 if not self._voice_session_active or len(pcm) == 0:
                     continue
 
-                if self.on_orb_state and GTK_AVAILABLE and GLib:
-                    GLib.idle_add(self.on_orb_state, "thinking")
-                if self.on_status and GTK_AVAILABLE and GLib:
-                    GLib.idle_add(self.on_status, "Transcribing speech...")
+                _safe_orb("thinking")
+                _safe_status("Transcribing speech...")
 
                 text = transcribe_pcm(pcm)
                 if not text or len(text.strip()) < 2:
                     continue
 
-                if self.on_chat and GTK_AVAILABLE and GLib:
-                    GLib.idle_add(self.on_chat, "user", text)
+                _safe_chat("user", text)
 
                 reply = "I heard you, sir."
                 if self.agent and self._loop:
@@ -127,23 +148,19 @@ class UIBridge:
                     )
                     reply = future.result(timeout=45.0)
 
-                if self.on_chat and GTK_AVAILABLE and GLib:
-                    GLib.idle_add(self.on_chat, "assistant", reply)
+                _safe_chat("assistant", reply)
 
-                if self.on_orb_state and GTK_AVAILABLE and GLib:
-                    GLib.idle_add(self.on_orb_state, "speaking")
-                if self.on_status and GTK_AVAILABLE and GLib:
-                    GLib.idle_add(self.on_status, "Speaking...")
+                # Speak with full-duplex barge-in monitoring
+                interrupted_pcm = session.speak_and_listen_duplex(reply)
 
-                speak(reply)
-
-                if self.on_orb_state and GTK_AVAILABLE and GLib:
-                    GLib.idle_add(self.on_orb_state, "listening")
-                if self.on_status and GTK_AVAILABLE and GLib:
-                    GLib.idle_add(self.on_status, "Voice Session Active")
+                if interrupted_pcm is not None and len(interrupted_pcm) > 0:
+                    _safe_status("User Interrupted — Processing...")
+                else:
+                    _safe_orb("listening")
+                    _safe_status("Voice Session Active")
 
             except Exception as exc:
-                logger.warning("Voice worker iteration error: %s", exc)
+                logger.warning("Duplex voice worker iteration error: %s", exc)
                 time.sleep(0.5)
                 if not self._voice_session_active:
                     break

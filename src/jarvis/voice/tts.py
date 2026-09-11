@@ -8,6 +8,8 @@ import logging
 import os
 import shutil
 import subprocess  # nosec B404
+import threading
+from typing import Any, Callable, Optional
 
 try:
     import edge_tts
@@ -73,6 +75,33 @@ def speak(text: str, voice: str = DEFAULT_VOICE) -> bytes:
         logger.debug("TTS synthesis/playback failed (%s); falling back to offline speech synthesizers", exc)
         _offline_say(text)
         return b""
+
+
+def speak_interruptible(
+    text: str,
+    voice: str = DEFAULT_VOICE,
+    interrupt_event: Optional[threading.Event] = None,
+    level_callback: Optional[Callable[[float], None]] = None,
+) -> bool:
+    """Speak `text` with chunked streaming and support for instantaneous interruption."""
+    if not text or not text.strip():
+        return True
+    try:
+        from jarvis.voice.duplex import InterruptibleSpeaker
+
+        mp3 = synthesize(text, voice)
+        pcm, sample_rate, _ = decode_mp3(mp3)
+        speaker = InterruptibleSpeaker()
+        return speaker.play(
+            pcm,
+            sample_rate=sample_rate,
+            interrupt_event=interrupt_event,
+            level_callback=level_callback,
+        )
+    except Exception as exc:
+        logger.debug("Interruptible TTS failed (%s); falling back to standard offline speech", exc)
+        _offline_say(text)
+        return True
 
 
 async def speak_async(text: str, voice: str = DEFAULT_VOICE) -> bytes:

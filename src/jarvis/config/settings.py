@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     local_llm_timeout: float = Field(default=30.0, ge=1.0, le=300.0)
     vision_model: str = "llama-3.2-11b-vision-preview"
     local_vision_model: str = "llama3.2-vision"
+    voice_barge_in: bool = True
+    voice_barge_in_mode: str = "vad_and_wake"
+    voice_barge_in_sensitivity: float = Field(default=1.6, ge=1.0, le=5.0)
 
 
 @lru_cache

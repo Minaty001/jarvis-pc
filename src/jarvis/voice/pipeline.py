@@ -6,6 +6,7 @@ from typing import Callable
 
 from jarvis.config.settings import get_settings
 from jarvis.voice import stt
+from jarvis.voice.duplex import DuplexVoiceSession
 from jarvis.voice.microphone import Microphone
 from jarvis.voice.tts import speak
 from jarvis.voice.wake_word import WakeWordDetector
@@ -28,14 +29,22 @@ def wait_for_wake(phrases: list[str] | None = None) -> None:
 
 
 def voice_loop(on_command: Callable[[str], str]) -> None:
-    """Idle wake-word loop; routes recognized speech to `on_command`, reads reply aloud."""
-    voice = get_settings().voice
+    """Idle wake-word loop; routes recognized speech to `on_command`, reads reply aloud with barge-in interruption."""
+    settings = get_settings()
+    voice = settings.voice
+    session = DuplexVoiceSession()
+
     while True:
         wait_for_wake()
         speak("Yes, sir?", voice)
+        
         command = listen_once()
-        if not command:
-            speak("I did not catch that. Say it again, sir.", voice)
-            continue
-        reply = on_command(command)
-        speak(reply or "Done, sir.", voice)
+        while command:
+            reply = on_command(command)
+            # Full-duplex speech output: if interrupted, user_pcm contains the new command
+            user_pcm = session.speak_and_listen_duplex(reply or "Done, sir.", voice)
+            if user_pcm is not None and len(user_pcm) > 0:
+                # Interrupted by user! Process the interrupted command immediately without waiting for wake word
+                command = stt.transcribe(stt.wav_at_16k(user_pcm, 16000))
+            else:
+                command = ""
