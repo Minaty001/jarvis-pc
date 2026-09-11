@@ -22,6 +22,15 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         replace_file_snippet,
         run_workspace_tests,
     )
+    from jarvis.tools.builtin.desktop_automation import (
+        click_mouse,
+        focus_window,
+        locate_and_click,
+        move_mouse,
+        press_key,
+        scroll_mouse,
+        type_text,
+    )
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -146,4 +155,46 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.CONFIRM,
         capabilities=frozenset({"workspace.test"}),
         handler=run_workspace_tests,
+    ))
+    registry.register(ToolDefinition(
+        name="click_mouse",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"desktop.input"}),
+        handler=click_mouse,
+    ))
+    registry.register(ToolDefinition(
+        name="move_mouse",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"desktop.input"}),
+        handler=move_mouse,
+    ))
+    registry.register(ToolDefinition(
+        name="type_text",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"desktop.input"}),
+        handler=type_text,
+    ))
+    registry.register(ToolDefinition(
+        name="press_key",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"desktop.input"}),
+        handler=press_key,
+    ))
+    registry.register(ToolDefinition(
+        name="focus_window",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"desktop.window"}),
+        handler=focus_window,
+    ))
+    registry.register(ToolDefinition(
+        name="scroll_mouse",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"desktop.input"}),
+        handler=scroll_mouse,
+    ))
+    registry.register(ToolDefinition(
+        name="locate_and_click",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"desktop.input", "media.vision"}),
+        handler=locate_and_click,
     ))

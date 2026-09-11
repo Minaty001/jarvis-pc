@@ -112,6 +112,24 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     screen_snap.add_argument("--output", default=None, help="Output image path (default: ~/Pictures/...)")
     screen_sub.add_parser("active", help="Get currently focused active window")
     screen_sub.add_parser("list", help="List all open desktop windows")
+    
+    scr_click = screen_sub.add_parser("click", help="Click at desktop (X, Y) coordinates")
+    scr_click.add_argument("x", type=int, help="X pixel coordinate")
+    scr_click.add_argument("y", type=int, help="Y pixel coordinate")
+    scr_click.add_argument("--button", default="left", choices=["left", "right", "middle"], help="Mouse button")
+    scr_click.add_argument("--clicks", type=int, default=1, help="Number of clicks")
+
+    scr_type = screen_sub.add_parser("type", help="Type text into focused window")
+    scr_type.add_argument("text", help="Text to type")
+
+    scr_key = screen_sub.add_parser("key", help="Press a key or key combination")
+    scr_key.add_argument("key", help="Key name (Return, Escape, Tab, ctrl+c, alt+Tab, etc.)")
+
+    scr_focus = screen_sub.add_parser("focus", help="Focus window by title or hex ID")
+    scr_focus.add_argument("window", help="Window title or ID")
+
+    scr_locate = screen_sub.add_parser("locate", help="Visually locate element on screen and click it")
+    scr_locate.add_argument("description", help="Description of element (e.g. 'Submit button', 'Settings icon')")
 
     vision_parser = subparsers.add_parser("vision", help="Multimodal vision analysis")
     vision_sub = vision_parser.add_subparsers(dest="vision_action", help="Vision action")
@@ -222,8 +240,35 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
                     print(f"• {w['window_id']:<12} | {w['app_class']:<25} | {w['title']}")
                 print("-" * 65)
             return 0
+        elif parsed_args.screen_action == "click":
+            from jarvis.tools.builtin.desktop_automation import click_mouse
+            msg = asyncio.run(click_mouse(parsed_args.x, parsed_args.y, button=parsed_args.button, clicks=parsed_args.clicks))
+            print(msg)
+            return 0
+        elif parsed_args.screen_action == "type":
+            from jarvis.tools.builtin.desktop_automation import type_text
+            msg = asyncio.run(type_text(parsed_args.text))
+            print(msg)
+            return 0
+        elif parsed_args.screen_action == "key":
+            from jarvis.tools.builtin.desktop_automation import press_key
+            msg = asyncio.run(press_key(parsed_args.key))
+            print(msg)
+            return 0
+        elif parsed_args.screen_action == "focus":
+            from jarvis.tools.builtin.desktop_automation import focus_window
+            msg = asyncio.run(focus_window(parsed_args.window))
+            print(msg)
+            return 0
+        elif parsed_args.screen_action == "locate":
+            from jarvis.tools.builtin.desktop_automation import locate_and_click
+            application = app if app is not None else Application()
+            client = getattr(application.agent, "client", None) if hasattr(application, "agent") else None
+            msg = asyncio.run(locate_and_click(parsed_args.description, client=client))
+            print(msg)
+            return 0
         else:
-            print("Usage: jarvis screen {snap|active|list}")
+            print("Usage: jarvis screen {snap|active|list|click|type|key|focus|locate}")
             return 1
 
     if parsed_args.subcommand == "vision":
