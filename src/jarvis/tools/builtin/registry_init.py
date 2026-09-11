@@ -68,6 +68,12 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         recall_facts,
         remember_fact,
     )
+    from jarvis.tools.builtin.agenda_tools import (
+        cancel_agenda_item,
+        create_reminder,
+        list_agenda,
+        set_timer,
+    )
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -402,4 +408,28 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"memory.read"}),
         handler=get_user_profile,
+    ))
+    registry.register(ToolDefinition(
+        name="set_timer",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"scheduler.manage"}),
+        handler=set_timer,
+    ))
+    registry.register(ToolDefinition(
+        name="create_reminder",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"scheduler.manage"}),
+        handler=create_reminder,
+    ))
+    registry.register(ToolDefinition(
+        name="list_agenda",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"scheduler.read"}),
+        handler=list_agenda,
+    ))
+    registry.register(ToolDefinition(
+        name="cancel_agenda_item",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"scheduler.manage"}),
+        handler=cancel_agenda_item,
     ))

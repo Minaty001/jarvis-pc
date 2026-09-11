@@ -94,11 +94,24 @@ async def fetch_briefing_context(location: Optional[str] = None) -> Dict[str, An
 
     battery_str = f"{battery.percent:.0f}%" if battery else "N/A (AC Connected)"
 
+    # Agenda / Schedule items for today
+    agenda_summary = []
+    try:
+        from jarvis.scheduler.agenda_store import AgendaStore
+        store = AgendaStore()
+        today_items = store.get_items_for_day()
+        for it in today_items:
+            due_t = datetime.datetime.fromtimestamp(it.due_timestamp).strftime("%I:%M %p")
+            agenda_summary.append(f"{due_t}: {it.title} ({it.item_type})")
+    except Exception as exc:
+        logger.debug("Agenda query in briefing error: %s", exc)
+
     return {
         "date_str": now.strftime("%A, %B %d, %Y"),
         "time_str": now.strftime("%I:%M %p"),
         "period": period,
         "weather": weather,
+        "agenda": agenda_summary,
         "system": {
             "cpu_percent": cpu,
             "ram_percent": ram,
@@ -116,14 +129,17 @@ async def generate_briefing(
     ctx = await fetch_briefing_context(location)
     w = ctx["weather"]
     s = ctx["system"]
+    ag = ctx.get("agenda", [])
 
     # If LLM client is available, generate dynamic synthesized briefing
     if client:
+        agenda_str = ", ".join(ag) if ag else "No scheduled events today."
         prompt = (
             f"You are JARVIS, the articulate, highly capable AI butler for Linux Mint.\n"
             f"Synthesize the following situational metrics into a concise, elegant spoken morning/daily briefing (3-4 sentences max):\n"
             f"- Date & Time: {ctx['date_str']} at {ctx['time_str']} ({ctx['period']})\n"
             f"- Weather in {w.get('location')}: {w.get('temperature_c')}°C, {w.get('condition')} (Humidity: {w.get('humidity')})\n"
+            f"- Schedule & Agenda: {agenda_str}\n"
             f"- System Health: CPU at {s['cpu_percent']}%, RAM at {s['ram_percent']}%, Root Disk at {s['disk_percent']}%, Battery: {s['battery']}\n\n"
             "Format as a warm, authoritative spoken address to 'sir'."
         )
@@ -137,13 +153,17 @@ async def generate_briefing(
     weather_sentence = (
         f"The weather in {w.get('location')} is currently {w.get('condition')} with a temperature of {w.get('temperature_c')} degrees Celsius."
     )
+    agenda_sentence = ""
+    if ag:
+        agenda_sentence = f" On your agenda today: {'; '.join(ag)}."
+
     system_sentence = (
         f"All system vitals are nominal. CPU load is at {s['cpu_percent']} percent, "
         f"memory utilization is at {s['ram_percent']} percent, and {s['battery']} battery is available."
     )
     closing = "JARVIS systems are fully operational and standing by for your instructions."
 
-    return f"{greeting} Today is {ctx['date_str']}. {weather_sentence} {system_sentence} {closing}"
+    return f"{greeting} Today is {ctx['date_str']}. {weather_sentence}{agenda_sentence} {system_sentence} {closing}"
 
 
 async def speak_briefing(

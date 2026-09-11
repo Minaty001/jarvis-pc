@@ -242,6 +242,26 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     mem_sub.add_parser("profile", help="Show structured operator profile and preferences")
     mem_sub.add_parser("stats", help="Show memory storage metrics and database path")
 
+    timer_parser = subparsers.add_parser("timer", help="Set and manage countdown timers")
+    timer_parser.add_argument("duration", help="Timer duration (e.g. 10m, 45s, 1h 30m, 5m)")
+    timer_parser.add_argument("label", nargs="?", default="Timer", help="Timer label / description")
+
+    agenda_parser = subparsers.add_parser("agenda", help="Smart Agenda, Reminders, and Daily Schedule Hub")
+    agenda_sub = agenda_parser.add_subparsers(dest="agenda_action", help="Agenda action")
+
+    ag_list = agenda_sub.add_parser("list", help="List scheduled reminders and active timers")
+    ag_list.add_argument("--all", action="store_true", help="Include completed and cancelled items")
+
+    ag_add = agenda_sub.add_parser("add", help="Schedule a new reminder or calendar event")
+    ag_add.add_argument("when", help="Time expression (e.g. 'tomorrow at 3pm', 'in 2 hours', 'today at 6pm')")
+    ag_add.add_argument("title", help="Event / reminder title")
+    ag_add.add_argument("--recurring", choices=["daily", "weekly"], default=None, help="Recurring schedule interval")
+
+    ag_cancel = agenda_sub.add_parser("cancel", help="Cancel an agenda item or timer by ID")
+    ag_cancel.add_argument("id", type=int, help="Agenda item ID")
+
+    agenda_sub.add_parser("clear", help="Clear completed and cancelled agenda items")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
@@ -799,6 +819,66 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
 
         else:
             print("Usage: jarvis memory {list|search|remember|forget|profile|stats}")
+            return 1
+
+    if parsed_args.subcommand == "timer":
+        from jarvis.scheduler.agenda_engine import get_agenda_engine
+
+        engine = get_agenda_engine()
+        item_id, target_dt, sec = engine.set_timer(parsed_args.duration, label=parsed_args.label)
+        time_str = target_dt.strftime("%I:%M:%S %p")
+        print(f"\nCountdown Timer #{item_id} active for '{parsed_args.label}' ({parsed_args.duration}). Due at {time_str}.\n")
+        return 0
+
+    if parsed_args.subcommand == "agenda":
+        import datetime
+        from jarvis.scheduler.agenda_engine import get_agenda_engine
+
+        engine = get_agenda_engine()
+        action = parsed_args.agenda_action
+
+        if action == "list":
+            status_filter = None if getattr(parsed_args, "all", False) else "pending"
+            items = engine.list_agenda(status=status_filter)
+            if not items:
+                print("\nNo pending reminders or active timers on your agenda.\n")
+            else:
+                print(f"\nJARVIS Agenda & Active Timers ({len(items)} items):")
+                print("=" * 70)
+                for it in items:
+                    due_dt = datetime.datetime.fromtimestamp(it.due_timestamp)
+                    due_str = due_dt.strftime("%Y-%m-%d %I:%M %p")
+                    rec_str = f" [Recurring: {it.recurring}]" if it.recurring else ""
+                    print(f"• #{it.id:<3} [{it.item_type.upper():<8}] {it.title:<25} | Due: {due_str} [{it.status.upper()}]{rec_str}")
+                print("=" * 70 + "\n")
+            return 0
+
+        elif action == "add":
+            item_id, target_dt, sec = engine.add_reminder(
+                parsed_args.when,
+                title=parsed_args.title,
+                recurring=parsed_args.recurring,
+            )
+            time_str = target_dt.strftime("%A, %B %d at %I:%M %p")
+            rec_str = f" [Recurring: {parsed_args.recurring}]" if parsed_args.recurring else ""
+            print(f"\nScheduled Reminder #{item_id} for '{parsed_args.title}' on {time_str}{rec_str}.\n")
+            return 0
+
+        elif action == "cancel":
+            ok = engine.cancel_item(parsed_args.id)
+            if ok:
+                print(f"\nAgenda item #{parsed_args.id} cancelled.\n")
+                return 0
+            print(f"\nAgenda item #{parsed_args.id} not found.\n")
+            return 1
+
+        elif action == "clear":
+            count = engine.store.clear_completed()
+            print(f"\nPurged {count} completed/cancelled agenda items.\n")
+            return 0
+
+        else:
+            print("Usage: jarvis agenda {list|add|cancel|clear}")
             return 1
 
     if parsed_args.subcommand == "telegram":
