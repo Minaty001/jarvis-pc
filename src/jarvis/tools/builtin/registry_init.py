@@ -7,7 +7,14 @@ from jarvis.tools.registry import ToolRegistry
 def register_all_builtins(registry: ToolRegistry) -> None:
     """Register every builtin tool into the given registry."""
     from jarvis.tools.builtin.filesystem import SafeFileStore
-    from jarvis.tools.builtin.applications import open_application, open_url
+    from jarvis.tools.builtin.applications import (
+        check_installed_package,
+        get_system_package_manager_status,
+        list_installed_applications,
+        open_application,
+        open_url,
+        search_linux_software,
+    )
     from jarvis.tools.builtin.processes import find_processes
     from jarvis.tools.builtin.media import check_camera_permissions, play_song
     from jarvis.tools.builtin.camera import list_cameras, take_photo
@@ -529,4 +536,28 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"network.read"}),
         handler=list_network_devices,
+    ))
+    registry.register(ToolDefinition(
+        name="list_installed_applications",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"process.read"}),
+        handler=list_installed_applications,
+    ))
+    registry.register(ToolDefinition(
+        name="check_installed_package",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"process.read"}),
+        handler=check_installed_package,
+    ))
+    registry.register(ToolDefinition(
+        name="search_linux_software",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"network.read", "process.read"}),
+        handler=search_linux_software,
+    ))
+    registry.register(ToolDefinition(
+        name="get_system_package_manager_status",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"process.read"}),
+        handler=get_system_package_manager_status,
     ))

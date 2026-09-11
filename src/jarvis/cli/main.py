@@ -309,6 +309,28 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     net_sub.add_parser("bench", help="Run comprehensive network latency and speed benchmark")
     net_sub.add_parser("devices", help="List cached local network devices")
 
+    pkg_parser = subparsers.add_parser("pkg", help="Linux Software Package Management & Inspection")
+    pkg_sub = pkg_parser.add_subparsers(dest="pkg_action", help="Package action")
+
+    pkg_check = pkg_sub.add_parser("check", help="Check if a software package is installed")
+    pkg_check.add_argument("name", help="Package name")
+
+    pkg_search = pkg_sub.add_parser("search", help="Search available software packages")
+    pkg_search.add_argument("query", help="Search keyword")
+    pkg_search.add_argument("--limit", type=int, default=15, help="Max results")
+
+    pkg_list = pkg_sub.add_parser("list", help="List installed system packages")
+    pkg_list.add_argument("--filter", default="", help="Filter query")
+    pkg_list.add_argument("--limit", type=int, default=40, help="Max items")
+
+    pkg_sub.add_parser("status", help="Show package manager status and backends")
+
+    apps_parser = subparsers.add_parser("apps", help="Linux Desktop Application Discovery & Launching")
+    apps_sub = apps_parser.add_subparsers(dest="apps_action", help="Apps action")
+    apps_sub.add_parser("list", help="List all installed desktop applications")
+    apps_open = apps_sub.add_parser("open", help="Launch a desktop application")
+    apps_open.add_argument("name", help="Application name or ID")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
@@ -1152,6 +1174,106 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
 
         else:
             print("Usage: jarvis network {scan|ping|wol|bench|devices}")
+            return 1
+
+    if parsed_args.subcommand == "pkg":
+        from jarvis.system.packages import (
+            detect_primary_package_manager,
+            get_available_package_managers,
+            get_package_info,
+            is_package_installed,
+            list_installed_packages,
+            search_packages,
+        )
+
+        action = parsed_args.pkg_action
+        if action == "check":
+            installed = is_package_installed(parsed_args.name)
+            info = get_package_info(parsed_args.name)
+            print("\n" + "=" * 60)
+            print(f"Package:     {parsed_args.name}")
+            print(f"Status:      {'INSTALLED' if installed else 'NOT INSTALLED'}")
+            if installed:
+                print(f"Version:     {info.get('version', 'unknown')}")
+                print(f"Description: {info.get('description', 'N/A')}")
+            print("=" * 60 + "\n")
+            return 0
+
+        elif action == "search":
+            results = search_packages(parsed_args.query, limit=parsed_args.limit)
+            if not results:
+                print(f"\nNo packages found matching query '{parsed_args.query}'.\n")
+                return 0
+
+            print(f"\nSearch results for '{parsed_args.query}' ({len(results)} found):")
+            print("=" * 75)
+            print(f"{'PACKAGE NAME':<28} | {'DESCRIPTION'}")
+            print("-" * 75)
+            for r in results:
+                print(f"{r['name']:<28} | {r.get('description', '')[:42]}")
+            print("=" * 75 + "\n")
+            return 0
+
+        elif action == "list":
+            pkgs = list_installed_packages(filter_query=parsed_args.filter, limit=parsed_args.limit)
+            if not pkgs:
+                print("\nNo installed packages found matching filter.\n")
+                return 0
+
+            print(f"\nInstalled System Packages ({len(pkgs)} displayed):")
+            print("=" * 60)
+            for p in pkgs:
+                print(f"• {p}")
+            print("=" * 60 + "\n")
+            return 0
+
+        elif action == "status":
+            mgrs = get_available_package_managers()
+            primary = detect_primary_package_manager()
+            print("\n" + "=" * 60)
+            print("JARVIS Linux Package Management Subsystem:")
+            print("-" * 60)
+            print(f"• Primary Manager:    {primary.upper()}")
+            print(f"• Available Backends: {', '.join(mgrs) if mgrs else 'None'}")
+            print("=" * 60 + "\n")
+            return 0
+
+        else:
+            print("Usage: jarvis pkg {check|search|list|status}")
+            return 1
+
+    if parsed_args.subcommand == "apps":
+        from jarvis.system.packages import list_desktop_applications
+        from jarvis.tools.builtin.applications import open_application
+
+        action = parsed_args.apps_action
+        if action == "list":
+            apps = list_desktop_applications()
+            if not apps:
+                print("\nNo desktop applications discovered in standard application directories.\n")
+                return 0
+
+            print(f"\nJARVIS Discovered Desktop Applications ({len(apps)} total):")
+            print("=" * 80)
+            print(f"{'APPLICATION NAME':<30} | {'DESKTOP ID':<22} | {'COMMAND'}")
+            print("-" * 80)
+            for a in apps:
+                print(f"{a['name']:<30} | {a['id']:<22} | {a['exec']}")
+            print("=" * 80 + "\n")
+            return 0
+
+        elif action == "open":
+            print(f"\n[JARVIS Apps] Launching desktop application: '{parsed_args.name}'...")
+            try:
+                res = asyncio.run(open_application(parsed_args.name))
+                print(f"Application '{parsed_args.name}' launched successfully (PID output: {res.returncode}).\n")
+                return 0
+            except Exception as exc:
+                print(f"Failed to launch application '{parsed_args.name}': {exc}\n")
+                return 1
+
+        else:
+            print("Usage: jarvis apps {list|open}")
             return 1
 
     if parsed_args.subcommand == "telegram":
