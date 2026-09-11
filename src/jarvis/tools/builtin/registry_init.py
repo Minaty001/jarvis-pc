@@ -52,6 +52,16 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         run_macro,
         toggle_macro,
     )
+    from jarvis.tools.builtin.system_control_tools import (
+        get_display_brightness,
+        get_system_volume,
+        manage_bluetooth,
+        manage_network,
+        manage_power,
+        manage_process,
+        set_display_brightness,
+        set_system_volume,
+    )
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -314,4 +324,52 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"macros.manage"}),
         handler=toggle_macro,
+    ))
+    registry.register(ToolDefinition(
+        name="set_system_volume",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"system.control"}),
+        handler=set_system_volume,
+    ))
+    registry.register(ToolDefinition(
+        name="get_system_volume",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"system.read"}),
+        handler=get_system_volume,
+    ))
+    registry.register(ToolDefinition(
+        name="set_display_brightness",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"system.control"}),
+        handler=set_display_brightness,
+    ))
+    registry.register(ToolDefinition(
+        name="get_display_brightness",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"system.read"}),
+        handler=get_display_brightness,
+    ))
+    registry.register(ToolDefinition(
+        name="manage_bluetooth",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"system.control"}),
+        handler=manage_bluetooth,
+    ))
+    registry.register(ToolDefinition(
+        name="manage_network",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"network.control"}),
+        handler=manage_network,
+    ))
+    registry.register(ToolDefinition(
+        name="manage_power",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"system.power"}),
+        handler=manage_power,
+    ))
+    registry.register(ToolDefinition(
+        name="manage_process",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"system.process"}),
+        handler=manage_process,
     ))

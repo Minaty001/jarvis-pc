@@ -191,6 +191,35 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     m_toggle.add_argument("name", help="Macro name")
     m_toggle.add_argument("state", choices=["enable", "disable"], help="State to set")
 
+    ctrl_parser = subparsers.add_parser("control", help="System & Hardware Control Hub (Volume, Brightness, Bluetooth, Wi-Fi, Power, Processes)")
+    ctrl_sub = ctrl_parser.add_subparsers(dest="control_action", help="Control target")
+
+    vol_p = ctrl_sub.add_parser("volume", help="Get or set system audio volume")
+    vol_p.add_argument("level", nargs="?", type=int, default=None, help="Volume percentage (0-100)")
+    vol_p.add_argument("--mute", action="store_true", help="Mute audio")
+    vol_p.add_argument("--unmute", action="store_true", help="Unmute audio")
+
+    bri_p = ctrl_sub.add_parser("brightness", help="Get or set display brightness")
+    bri_p.add_argument("level", nargs="?", type=int, default=None, help="Brightness percentage (5-100)")
+
+    bt_p = ctrl_sub.add_parser("bluetooth", help="Bluetooth adapter and device management")
+    bt_p.add_argument("bt_action", choices=["list", "on", "off", "connect", "disconnect"], help="Action to perform")
+    bt_p.add_argument("device", nargs="?", default=None, help="Device name or MAC address")
+
+    wifi_p = ctrl_sub.add_parser("wifi", help="Network and Wi-Fi adapter control")
+    wifi_p.add_argument("wifi_action", choices=["status", "list", "on", "off"], help="Action to perform")
+
+    power_p = ctrl_sub.add_parser("power", help="System power and session management")
+    power_p.add_argument("power_action", choices=["lock", "suspend", "reboot", "shutdown"], help="Power operation")
+    power_p.add_argument("-y", "--yes", action="store_true", help="Confirm dangerous power operation")
+
+    kill_p = ctrl_sub.add_parser("kill", help="Terminate process by name or PID")
+    kill_p.add_argument("target", help="Process name or PID")
+    kill_p.add_argument("-f", "--force", action="store_true", help="Force terminate with SIGKILL")
+
+    close_p = ctrl_sub.add_parser("close", help="Close desktop window by title")
+    close_p.add_argument("window", help="Window title")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
@@ -541,6 +570,132 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
 
         else:
             print("Usage: jarvis macro {list|run|show|toggle}")
+            return 1
+
+    if parsed_args.subcommand == "control":
+        from jarvis.system.control import get_system_controller
+
+        ctrl = get_system_controller()
+        action = parsed_args.control_action
+
+        if action == "volume":
+            if parsed_args.mute:
+                ctrl.audio.set_mute(True)
+            elif parsed_args.unmute:
+                ctrl.audio.set_mute(False)
+
+            if parsed_args.level is not None:
+                ctrl.audio.set_volume(parsed_args.level)
+
+            info = ctrl.audio.get_volume()
+            st = "MUTED" if info.get("muted") else "ACTIVE"
+            print(f"System Volume: {info.get('percent')}% [{st}] (backend: {info.get('backend')})")
+            return 0
+
+        elif action == "brightness":
+            if parsed_args.level is not None:
+                ctrl.brightness.set_brightness(parsed_args.level)
+            info = ctrl.brightness.get_brightness()
+            print(f"Display Brightness: {info.get('percent')}% (backend: {info.get('backend')})")
+            return 0
+
+        elif action == "bluetooth":
+            b_act = parsed_args.bt_action
+            if b_act == "list":
+                devs = ctrl.bluetooth.list_devices()
+                if not devs:
+                    print("No paired or available Bluetooth devices found.")
+                else:
+                    print(f"\nDiscovered {len(devs)} Bluetooth Device(s):")
+                    print("-" * 65)
+                    for d in devs:
+                        print(f"• {d['mac']:<20} | {d['name']}")
+                    print("-" * 65 + "\n")
+            elif b_act == "on":
+                ctrl.bluetooth.set_power(True)
+                print("Bluetooth adapter powered ON.")
+            elif b_act == "off":
+                ctrl.bluetooth.set_power(False)
+                print("Bluetooth adapter powered OFF.")
+            elif b_act == "connect":
+                if not parsed_args.device:
+                    print("Error: Target device MAC or name required for connect.")
+                    return 1
+                ok = ctrl.bluetooth.connect_device(parsed_args.device)
+                print(f"Connect to '{parsed_args.device}': {'SUCCESS' if ok else 'FAILED'}")
+                return 0 if ok else 1
+            elif b_act == "disconnect":
+                if not parsed_args.device:
+                    print("Error: Target device MAC or name required for disconnect.")
+                    return 1
+                ok = ctrl.bluetooth.disconnect_device(parsed_args.device)
+                print(f"Disconnect from '{parsed_args.device}': {'SUCCESS' if ok else 'FAILED'}")
+                return 0 if ok else 1
+            return 0
+
+        elif action == "wifi":
+            w_act = parsed_args.wifi_action
+            if w_act == "status":
+                info = ctrl.network.get_status()
+                print("\nNetwork Status:")
+                print("=" * 60)
+                print(f"• Connected:   {'YES' if info['connected'] else 'NO'}")
+                print(f"• Active SSID: {info['ssid']}")
+                print(f"• IP Address:  {info['ip']}")
+                print(f"• Interface:   {info['interface']}")
+                print("=" * 60 + "\n")
+            elif w_act == "list":
+                nets = ctrl.network.list_wifi()
+                if not nets:
+                    print("No Wi-Fi networks found.")
+                else:
+                    print(f"\nDiscovered {len(nets)} Wi-Fi Network(s):")
+                    print("-" * 65)
+                    for w in nets:
+                        print(f"• {w['ssid']:<25} | Signal: {w['signal']}% | {w['security']}")
+                    print("-" * 65 + "\n")
+            elif w_act == "on":
+                ctrl.network.set_wifi_power(True)
+                print("Wi-Fi radio enabled.")
+            elif w_act == "off":
+                ctrl.network.set_wifi_power(False)
+                print("Wi-Fi radio disabled.")
+            return 0
+
+        elif action == "power":
+            p_act = parsed_args.power_action
+            if p_act == "lock":
+                ok = ctrl.power.lock_session()
+                print("Session locked." if ok else "Failed to lock session.")
+                return 0 if ok else 1
+            if not parsed_args.yes:
+                ans = input(f"Are you sure you want to perform system '{p_act}'? [y/N] ")
+                if ans.strip().lower() not in ("y", "yes"):
+                    print("Operation cancelled.")
+                    return 0
+            if p_act == "suspend":
+                ctrl.power.suspend()
+            elif p_act == "reboot":
+                ctrl.power.reboot()
+            elif p_act == "shutdown":
+                ctrl.power.poweroff()
+            return 0
+
+        elif action == "kill":
+            res = ctrl.process.kill_process(parsed_args.target, force=parsed_args.force)
+            if res["success"]:
+                print(f"Terminated {res['killed']} process(es) matching '{parsed_args.target}' (PIDs: {res['pids']}).")
+                return 0
+            print(f"No running processes found matching '{parsed_args.target}'.")
+            return 1
+
+        elif action == "close":
+            ok = ctrl.process.close_window(parsed_args.window)
+            print(f"Close window '{parsed_args.window}': {'SUCCESS' if ok else 'FAILED'}")
+            return 0 if ok else 1
+
+        else:
+            print("Usage: jarvis control {volume|brightness|bluetooth|wifi|power|kill|close}")
             return 1
 
     if parsed_args.subcommand == "telegram":
