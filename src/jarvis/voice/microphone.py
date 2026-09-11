@@ -59,6 +59,7 @@ class Microphone:
         pre_roll = deque(maxlen=max(1, 400 // chunk_ms))
         frames: list[np.ndarray] = []
         silent_ms = 0
+        unspoken_ms = 0
         spoke = False
 
         for chunk in self.iter_chunks(level_callback=level_callback):
@@ -72,10 +73,12 @@ class Microphone:
             elif spoke:
                 silent_ms += chunk_ms
                 frames.append(chunk)
+            else:
+                unspoken_ms += chunk_ms
 
             if spoke and (silent_ms >= SILENCE_MS or len(frames) * chunk_ms / 1000 >= MAX_SECONDS):
                 break
-            if not spoke and chunk_ms * (len(pre_roll) + 1) >= 4000:
+            if not spoke and unspoken_ms >= 4000:
                 break
 
         if not spoke:
