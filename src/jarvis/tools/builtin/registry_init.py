@@ -14,6 +14,14 @@ def register_all_builtins(registry: ToolRegistry) -> None:
     from jarvis.tools.builtin.screen import take_screenshot, get_active_window, list_open_windows
     from jarvis.tools.builtin.vision import analyze_image
     from jarvis.tools.builtin.browser import browse_web
+    from jarvis.tools.builtin.coding import (
+        git_branch,
+        git_commit,
+        git_diff,
+        git_status,
+        replace_file_snippet,
+        run_workspace_tests,
+    )
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -102,4 +110,40 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"network.read"}),
         handler=browse_web,
+    ))
+    registry.register(ToolDefinition(
+        name="git_status",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"workspace.git"}),
+        handler=git_status,
+    ))
+    registry.register(ToolDefinition(
+        name="git_branch",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"workspace.git"}),
+        handler=git_branch,
+    ))
+    registry.register(ToolDefinition(
+        name="git_diff",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"workspace.git"}),
+        handler=git_diff,
+    ))
+    registry.register(ToolDefinition(
+        name="git_commit",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"workspace.git"}),
+        handler=git_commit,
+    ))
+    registry.register(ToolDefinition(
+        name="replace_file_snippet",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"filesystem.write"}),
+        handler=replace_file_snippet,
+    ))
+    registry.register(ToolDefinition(
+        name="run_workspace_tests",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"workspace.test"}),
+        handler=run_workspace_tests,
     ))

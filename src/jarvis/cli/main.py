@@ -119,6 +119,11 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     vis_an.add_argument("image_path", help="Path to image file")
     vis_an.add_argument("--prompt", default="Describe what you see in this image in detail.", help="Question or prompt")
 
+    code_parser = subparsers.add_parser("code", help="Multi-agent coding copilot for autonomous refactoring and test generation")
+    code_parser.add_argument("task", help="Coding task or refactor instruction")
+    code_parser.add_argument("--path", default=".", help="Workspace path (default: current directory)")
+    code_parser.add_argument("--no-commit", action="store_true", help="Do not automatically commit after tests pass")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
@@ -242,6 +247,33 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
         else:
             print("Usage: jarvis vision analyze <image_path> [--prompt ...]")
             return 1
+
+    if parsed_args.subcommand == "code":
+        from jarvis.brain.coder.orchestrator import CodingCopilot
+
+        application = app if app is not None else Application()
+        client = getattr(application.agent, "client", None) if hasattr(application, "agent") else None
+        copilot = CodingCopilot(llm_client=client)
+
+        print(f"\n[JARVIS Copilot] Starting multi-agent coding pipeline for task: '{parsed_args.task}'")
+        res = asyncio.run(
+            copilot.execute_task(
+                parsed_args.task,
+                workspace_path=parsed_args.path,
+                auto_commit=not parsed_args.no_commit,
+            )
+        )
+        print("\n" + "=" * 65)
+        print(f"Status:         {'SUCCESS' if res.success else 'FAILED'}")
+        print(f"Branch:         {res.branch}")
+        print(f"Strategy:       {res.plan}")
+        print(f"Modified Files: {', '.join(res.files_modified) if res.files_modified else '(none)'}")
+        if res.commit_info:
+            print(f"Commit:         {res.commit_info}")
+        if res.error:
+            print(f"Error:          {res.error}")
+        print("=" * 65 + "\n")
+        return 0 if res.success else 1
 
     if parsed_args.subcommand == "telegram":
         from jarvis.remote.telegram import bridge_main
