@@ -32,6 +32,11 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         type_text,
     )
     from jarvis.tools.builtin.weather import get_daily_briefing, get_weather
+    from jarvis.tools.builtin.voice_tools import (
+        list_voice_profiles,
+        set_voice_profile,
+        tune_voice_acoustics,
+    )
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -210,4 +215,22 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"system.read", "network.read"}),
         handler=get_daily_briefing,
+    ))
+    registry.register(ToolDefinition(
+        name="list_voice_profiles",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"voice.config"}),
+        handler=list_voice_profiles,
+    ))
+    registry.register(ToolDefinition(
+        name="set_voice_profile",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"voice.config"}),
+        handler=set_voice_profile,
+    ))
+    registry.register(ToolDefinition(
+        name="tune_voice_acoustics",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"voice.config"}),
+        handler=tune_voice_acoustics,
     ))

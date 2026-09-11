@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     default_location: str = "auto"
     morning_briefing_time: str = "08:00"
     briefing_spoken: bool = True
+    voice_profile: str = "british_butler"
+    voice_rate: str = "+0%"
+    voice_pitch: str = "+0Hz"
 
 
 @lru_cache

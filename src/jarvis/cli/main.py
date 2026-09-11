@@ -88,12 +88,15 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     subparsers.add_parser("version", help="Show JARVIS version")
     subparsers.add_parser("help", help="Show help message")
 
-    voice_parser = subparsers.add_parser("voice", help="Voice commands (TTS, STT, wake word)")
+    voice_parser = subparsers.add_parser("voice", help="Voice commands (TTS, STT, wake word, profiles)")
     voice_sub = voice_parser.add_subparsers(dest="voice_action", help="Voice action")
     voice_sub.add_parser("speak", help="Speak text aloud").add_argument("text", help="Text to speak")
     voice_sub.add_parser("listen", help="Record once and transcribe (Groq whisper)")
     voice_sub.add_parser("wake", help="Wait until the wake word is spoken")
     voice_sub.add_parser("session", help="Full wake-word voice session with the JARVIS agent")
+    voice_sub.add_parser("profiles", help="List all available neural voice personality profiles")
+    set_prof_p = voice_sub.add_parser("set-profile", help="Activate a neural voice personality profile")
+    set_prof_p.add_argument("name", help="Profile name (e.g. british_butler, classic_jarvis, tactical_ai, indian_english, hindi_assistant, etc.)")
 
     cam_parser = subparsers.add_parser("camera", help="Camera discovery and snapshot capture")
     cam_sub = cam_parser.add_subparsers(dest="camera_action", help="Camera action")
@@ -481,8 +484,33 @@ def _run_voice(parsed_args, app: Application | None) -> int:
             return asyncio.run(agent.respond(text, session_id="voice"))
 
         pipeline.voice_loop(on_command)
+    elif action == "profiles":
+        from jarvis.voice.profiles import VoiceProfileManager
+
+        mgr = VoiceProfileManager()
+        active = mgr.get_active_profile()
+        print("\nJARVIS Neural Voice Personality Profiles:")
+        print("=" * 70)
+        for p in mgr.list_profiles():
+            marker = "★ [ACTIVE]" if p["key"] == active.key else "          "
+            print(f"{marker} {p['key']:<16} | {p['name']:<20} | {p['language']} ({p['gender']})")
+            print(f"             Voice: {p['voice']} | Rate: {p['rate']} | Pitch: {p['pitch']}")
+            print(f"             Desc:  {p['description']}")
+            print("-" * 70)
+        print()
+    elif action == "set-profile":
+        from jarvis.voice.profiles import VoiceProfileManager
+
+        mgr = VoiceProfileManager()
+        try:
+            prof = mgr.set_profile(parsed_args.name)
+            print(f"\nSuccessfully activated voice profile '{prof.key}' ({prof.name}).")
+            print(f"Voice: {prof.voice} | Rate: {prof.rate} | Pitch: {prof.pitch}\n")
+        except Exception as exc:
+            print(f"Error setting voice profile: {exc}")
+            return 1
     else:
-        print("Usage: jarvis voice {speak|listen|wake|session}")
+        print("Usage: jarvis voice {speak|listen|wake|session|profiles|set-profile}")
         return 1
     return 0
 
