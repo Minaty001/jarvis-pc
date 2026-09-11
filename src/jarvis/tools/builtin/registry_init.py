@@ -31,6 +31,7 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         scroll_mouse,
         type_text,
     )
+    from jarvis.tools.builtin.weather import get_daily_briefing, get_weather
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -197,4 +198,16 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.CONFIRM,
         capabilities=frozenset({"desktop.input", "media.vision"}),
         handler=locate_and_click,
+    ))
+    registry.register(ToolDefinition(
+        name="get_weather",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"network.read"}),
+        handler=get_weather,
+    ))
+    registry.register(ToolDefinition(
+        name="get_daily_briefing",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"system.read", "network.read"}),
+        handler=get_daily_briefing,
     ))

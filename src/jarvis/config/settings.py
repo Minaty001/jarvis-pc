@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     voice_barge_in: bool = True
     voice_barge_in_mode: str = "vad_and_wake"
     voice_barge_in_sensitivity: float = Field(default=1.6, ge=1.0, le=5.0)
+    default_location: str = "auto"
+    morning_briefing_time: str = "08:00"
+    briefing_spoken: bool = True
 
 
 @lru_cache

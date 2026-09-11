@@ -142,6 +142,13 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     code_parser.add_argument("--path", default=".", help="Workspace path (default: current directory)")
     code_parser.add_argument("--no-commit", action="store_true", help="Do not automatically commit after tests pass")
 
+    weather_parser = subparsers.add_parser("weather", help="Query current live weather and forecasts")
+    weather_parser.add_argument("location", nargs="?", default="auto", help="Location or city (default: auto-detected)")
+
+    briefing_parser = subparsers.add_parser("briefing", help="Generate or speak comprehensive situational daily briefing")
+    briefing_parser.add_argument("--location", default=None, help="Location or city override")
+    briefing_parser.add_argument("--speak", action="store_true", help="Read briefing aloud via neural TTS")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
@@ -319,6 +326,32 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
             print(f"Error:          {res.error}")
         print("=" * 65 + "\n")
         return 0 if res.success else 1
+
+    if parsed_args.subcommand == "weather":
+        from jarvis.tools.builtin.weather import get_weather
+
+        weather_report = asyncio.run(get_weather(parsed_args.location))
+        print(f"\n{weather_report}\n")
+        return 0
+
+    if parsed_args.subcommand == "briefing":
+        from jarvis.proactive.briefing import generate_briefing, speak_briefing
+
+        application = app if app is not None else Application()
+        client = getattr(application.agent, "client", None) if hasattr(application, "agent") else None
+
+        if parsed_args.speak:
+            print("\n[JARVIS] Presenting spoken daily briefing...")
+            briefing_text = asyncio.run(speak_briefing(location=parsed_args.location, client=client))
+        else:
+            briefing_text = asyncio.run(generate_briefing(location=parsed_args.location, client=client))
+
+        print("\n" + "=" * 65)
+        print("JARVIS SITUATIONAL DAILY BRIEFING")
+        print("=" * 65)
+        print(briefing_text)
+        print("=" * 65 + "\n")
+        return 0
 
     if parsed_args.subcommand == "telegram":
         from jarvis.remote.telegram import bridge_main
