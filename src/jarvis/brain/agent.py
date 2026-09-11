@@ -88,6 +88,23 @@ TOOL_SPECS: dict[str, dict[str, Any]] = {
             },
         },
     },
+    "list_cameras": {
+        "description": "Discover and list all available camera/video capture hardware devices attached to the computer.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    "take_photo": {
+        "description": "Capture a photo from a connected camera device. Requires confirmation. Saves to user's Pictures directory or specified path.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "output_path": {"type": "string", "description": "Destination file path within home directory (e.g. ~/Pictures/photo.jpg). Optional."},
+                "device_path": {"type": "string", "description": "Camera device path, default /dev/video0."},
+            },
+        },
+    },
     "play_song": {
         "description": "Find and open the top YouTube result for a song or music request, ready to play. Requires confirmation.",
         "parameters": {

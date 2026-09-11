@@ -95,10 +95,80 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     voice_sub.add_parser("wake", help="Wait until the wake word is spoken")
     voice_sub.add_parser("session", help="Full wake-word voice session with the JARVIS agent")
 
+    cam_parser = subparsers.add_parser("camera", help="Camera discovery and snapshot capture")
+    cam_sub = cam_parser.add_subparsers(dest="camera_action", help="Camera action")
+    cam_sub.add_parser("list", help="List detected video devices")
+    snap_p = cam_sub.add_parser("snap", help="Take a photo from the camera")
+    snap_p.add_argument("--device", default="/dev/video0", help="Camera device path (default: /dev/video0)")
+    snap_p.add_argument("--output", default=None, help="Output file path (default: ~/Pictures/...)")
+
+    llm_parser = subparsers.add_parser("llm", help="Inspect LLM providers (Cloud & Local Ollama)")
+    llm_sub = llm_parser.add_subparsers(dest="llm_action", help="LLM action")
+    llm_sub.add_parser("status", help="Check Cloud and Local Ollama endpoint health")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
         return _run_voice(parsed_args, app)
+
+    if parsed_args.subcommand == "camera":
+        from jarvis.tools.builtin.camera import list_cameras, take_photo
+
+        if parsed_args.camera_action == "list":
+            cameras = list_cameras()
+            if not cameras:
+                print("No camera devices detected on this system.")
+            else:
+                print(f"\nDiscovered {len(cameras)} Camera Device(s):")
+                print("-" * 65)
+                for cam in cameras:
+                    acc_str = "ACCESSIBLE" if cam["accessible"] else "PERMISSION DENIED"
+                    print(f"• {cam['device']:<14} | {cam['name']} [{acc_str}]")
+                print("-" * 65)
+            return 0
+        elif parsed_args.camera_action == "snap":
+            try:
+                res = asyncio.run(take_photo(output_path=parsed_args.output, device_path=parsed_args.device))
+                print(res)
+                return 0
+            except Exception as exc:
+                print(f"Failed to capture photo: {exc}")
+                return 1
+        else:
+            print("Usage: jarvis camera {list|snap}")
+            return 1
+
+    if parsed_args.subcommand == "llm":
+        from jarvis.brain.client import LLMClient
+
+        application = app if app is not None else Application()
+        client = getattr(application.agent, "client", None)
+        if not client or not isinstance(client, LLMClient):
+            client = LLMClient.from_settings(application.settings)
+
+        if parsed_args.llm_action == "status":
+            health = asyncio.run(client.check_health())
+            print("\nJARVIS Multi-Tier LLM Architecture Status:")
+            print("=" * 65)
+            cloud = health["cloud"]
+            cloud_status = "CONFIGURED (API Key Present)" if cloud["available"] else "NOT CONFIGURED (No Key)"
+            print(f"• Primary Cloud LLM:   {cloud_status}")
+            print(f"  Endpoint:            {cloud['base_url']}")
+            print(f"  Model:               {cloud['model']}")
+            print("-" * 65)
+            local = health["local"]
+            local_reach = "ONLINE & REACHABLE" if local["reachable"] else "OFFLINE / UNREACHABLE"
+            print(f"• Local Offline LLM:   {local_reach}")
+            print(f"  Endpoint:            {local['base_url']}")
+            print(f"  Model:               {local['model']}")
+            print(f"  Failover Enabled:    {local['enabled']}")
+            print("-" * 65)
+            print(f"★ Active Cognitive Mode: {health['active_mode'].upper()}")
+            print("=" * 65)
+            return 0
+        else:
+            print("Usage: jarvis llm status")
+            return 1
 
     if parsed_args.subcommand == "telegram":
         from jarvis.remote.telegram import bridge_main

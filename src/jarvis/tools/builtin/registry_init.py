@@ -10,6 +10,7 @@ def register_all_builtins(registry: ToolRegistry) -> None:
     from jarvis.tools.builtin.applications import open_application, open_url
     from jarvis.tools.builtin.processes import find_processes
     from jarvis.tools.builtin.media import check_camera_permissions, play_song
+    from jarvis.tools.builtin.camera import list_cameras, take_photo
     from jarvis.tools.builtin.browser import browse_web
     from pathlib import Path
 
@@ -51,6 +52,18 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"media.camera"}),
         handler=check_camera_permissions,
+    ))
+    registry.register(ToolDefinition(
+        name="list_cameras",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"media.camera"}),
+        handler=list_cameras,
+    ))
+    registry.register(ToolDefinition(
+        name="take_photo",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"media.camera"}),
+        handler=take_photo,
     ))
     registry.register(ToolDefinition(
         name="play_song",

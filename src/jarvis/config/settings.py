@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     proactive_cpu_threshold: float = Field(default=90.0, ge=10.0, le=100.0)
     proactive_battery_threshold: float = Field(default=15.0, ge=1.0, le=100.0)
     proactive_interval: float = Field(default=30.0, ge=5.0, le=600.0)
+    local_llm_enabled: bool = True
+    local_llm_base_url: str = "http://localhost:11434/v1"
+    local_llm_model: str = "qwen2.5:7b"
+    local_llm_timeout: float = Field(default=30.0, ge=1.0, le=300.0)
 
 
 @lru_cache

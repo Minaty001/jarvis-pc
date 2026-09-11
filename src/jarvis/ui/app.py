@@ -19,6 +19,8 @@ from jarvis.ui.theme import load_css
 from jarvis.ui.floating_orb import FloatingOrb
 from jarvis.ui.main_window import MainWindow
 from jarvis.ui.bridge import UIBridge
+from jarvis.ui.tray import JarvisTray
+from jarvis.ui.hotkey import GlobalHotkeyManager
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,8 @@ class JarvisApp(Gtk.Application if GTK_AVAILABLE else object):  # type: ignore
         self.bridge = UIBridge(app_core)
         self.main_window: Optional[MainWindow] = None
         self.floating_orb: Optional[FloatingOrb] = None
+        self.tray: Optional[JarvisTray] = None
+        self.hotkeys: Optional[GlobalHotkeyManager] = None
         self._activated = False
 
     def do_activate(self) -> None:
@@ -76,6 +80,16 @@ class JarvisApp(Gtk.Application if GTK_AVAILABLE else object):  # type: ignore
         # 4. Start Core Bridge
         self.bridge.start()
 
+        # 5. System Tray & Global Hotkeys (Linux Mint / Cinnamon desktop integration)
+        self.tray = JarvisTray(
+            on_toggle_window=self._toggle_main_window,
+            on_toggle_orb=self._toggle_floating_orb,
+            on_quit=self._quit_application,
+        )
+        self.hotkeys = GlobalHotkeyManager()
+        self.hotkeys.bind("<Super>space", self._toggle_main_window)
+        self.hotkeys.bind("<Ctrl><Alt>j", self._toggle_main_window)
+
         # Welcome message
         self.main_window.add_chat("assistant", "Greetings! JARVIS PC is online and ready to assist you.")
 
@@ -93,11 +107,23 @@ class JarvisApp(Gtk.Application if GTK_AVAILABLE else object):  # type: ignore
         else:
             self.main_window.present()
 
+    def _toggle_floating_orb(self) -> None:
+        if not self.floating_orb:
+            return
+        if self.floating_orb.is_visible():
+            self.floating_orb.hide()
+        else:
+            self.floating_orb.show_all()
+
     def _on_main_hidden(self) -> None:
         logger.debug("Main window hidden; JARVIS continues running via Floating Orb.")
 
     def _quit_application(self) -> None:
         logger.info("Quitting JARVIS application...")
+        if self.hotkeys:
+            self.hotkeys.unbind()
+        if self.tray:
+            self.tray.destroy()
         if self.bridge:
             self.bridge.stop()
         self.quit()
