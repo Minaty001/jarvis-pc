@@ -33,8 +33,10 @@ def register_all_builtins(registry: ToolRegistry) -> None:
     )
     from jarvis.tools.builtin.weather import get_daily_briefing, get_weather
     from jarvis.tools.builtin.voice_tools import (
+        configure_wake_word,
         list_voice_profiles,
         set_voice_profile,
+        toggle_auto_wake,
         tune_voice_acoustics,
     )
     from pathlib import Path
@@ -233,4 +235,16 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"voice.config"}),
         handler=tune_voice_acoustics,
+    ))
+    registry.register(ToolDefinition(
+        name="toggle_auto_wake",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"voice.config"}),
+        handler=toggle_auto_wake,
+    ))
+    registry.register(ToolDefinition(
+        name="configure_wake_word",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"voice.config"}),
+        handler=configure_wake_word,
     ))

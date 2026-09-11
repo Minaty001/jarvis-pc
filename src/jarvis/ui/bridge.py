@@ -47,6 +47,7 @@ class UIBridge:
 
         self._voice_session_active = False
         self._voice_thread: Optional[threading.Thread] = None
+        self.auto_wake_service: Optional[Any] = None
 
     def feed_audio_level(self, level: float) -> None:
         """Marshal audio energy level to the GTK thread for waveform display."""
@@ -165,12 +166,68 @@ class UIBridge:
                 if not self._voice_session_active:
                     break
 
+    def _execute_voice_command(self, text: str) -> str:
+        """Execute command received via voice synchronously from worker thread."""
+        if not self.agent or not self._loop:
+            return f"JARVIS received: '{text}'."
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                self.agent.respond(text, session_id="voice-ambient"), self._loop
+            )
+            return future.result(timeout=45.0)
+        except Exception as exc:
+            logger.error("Error executing ambient voice command: %s", exc)
+            return f"Apologies sir, I encountered an issue: {exc}"
+
+    def toggle_auto_wake(self) -> bool:
+        """Toggle ambient auto wake word listening on/off."""
+        from jarvis.config.settings import get_settings
+        settings = get_settings()
+
+        if self.auto_wake_service and self.auto_wake_service.is_running:
+            self.auto_wake_service.stop()
+            self.auto_wake_service = None
+            settings.auto_wake_word = False
+            self._notify_ui_status("Auto Wake Word Disabled")
+            return False
+        else:
+            from jarvis.voice.auto_wake import AutoWakeService
+            self.auto_wake_service = AutoWakeService(
+                on_command=self._execute_voice_command,
+                on_orb_state=self._notify_ui_orb,
+                on_status=self._notify_ui_status,
+                on_chat=self._notify_ui_chat,
+                on_level=self.feed_audio_level,
+                settings=settings,
+            )
+            self.auto_wake_service.start()
+            settings.auto_wake_word = True
+            self._notify_ui_status("Auto Wake Word Enabled ('Hey Jarvis')")
+            return True
+
     def start(self) -> None:
         """Start the background bridge thread and system monitor timer."""
         self._running = True
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._run_event_loop, daemon=True, name="jarvis-ui-bridge")
         self._thread.start()
+
+        from jarvis.config.settings import get_settings
+        settings = get_settings()
+        if getattr(settings, "auto_wake_word", True):
+            try:
+                from jarvis.voice.auto_wake import AutoWakeService
+                self.auto_wake_service = AutoWakeService(
+                    on_command=self._execute_voice_command,
+                    on_orb_state=self._notify_ui_orb,
+                    on_status=self._notify_ui_status,
+                    on_chat=self._notify_ui_chat,
+                    on_level=self.feed_audio_level,
+                    settings=settings,
+                )
+                self.auto_wake_service.start()
+            except Exception as exc:
+                logger.warning("Could not start ambient AutoWakeService in UI bridge: %s", exc)
 
         if GTK_AVAILABLE and GLib:
             self._poll_timer_id = GLib.timeout_add(1500, self._poll_metrics)
@@ -181,6 +238,13 @@ class UIBridge:
         """Stop background tasks."""
         self._running = False
         self._voice_session_active = False
+        if self.auto_wake_service:
+            try:
+                self.auto_wake_service.stop()
+            except Exception as exc:
+                logger.debug("Error stopping AutoWakeService: %s", exc)
+            self.auto_wake_service = None
+
         if self._poll_timer_id and GTK_AVAILABLE and GLib:
             GLib.source_remove(self._poll_timer_id)
             self._poll_timer_id = None

@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess  # nosec B404
 import sys
+import time
 import urllib.request
 from typing import Sequence
 
@@ -97,6 +98,11 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     voice_sub.add_parser("profiles", help="List all available neural voice personality profiles")
     set_prof_p = voice_sub.add_parser("set-profile", help="Activate a neural voice personality profile")
     set_prof_p.add_argument("name", help="Profile name (e.g. british_butler, classic_jarvis, tactical_ai, indian_english, hindi_assistant, etc.)")
+    auto_wake_p = voice_sub.add_parser("auto-wake", help="Run continuous low-power background wake-word daemon")
+    auto_wake_p.add_argument("--phrases", default=None, help="Comma-separated trigger phrases (default: 'hey jarvis,jarvis')")
+    auto_wake_p.add_argument("--no-ack", action="store_true", help="Disable acoustic 'Yes, sir?' acknowledgment")
+    auto_wake_p.add_argument("--timeout", type=float, default=6.0, help="Conversational turn follow-up timeout in seconds")
+    voice_sub.add_parser("auto-wake-status", help="Inspect ambient wake-word service status and configuration")
 
     cam_parser = subparsers.add_parser("camera", help="Camera discovery and snapshot capture")
     cam_sub = cam_parser.add_subparsers(dest="camera_action", help="Camera action")
@@ -509,8 +515,57 @@ def _run_voice(parsed_args, app: Application | None) -> int:
         except Exception as exc:
             print(f"Error setting voice profile: {exc}")
             return 1
+    elif action == "auto-wake":
+        from jarvis.config.settings import get_settings
+        from jarvis.voice.auto_wake import AutoWakeService
+
+        application = app if app is not None else Application()
+        agent = application.agent
+        if not agent.confirmation_secret:
+            agent.confirmation_secret = application.settings.confirmation_secret or "repl-local"
+
+        def on_command(text: str) -> str:
+            import asyncio
+            return asyncio.run(agent.respond(text, session_id="voice-auto-wake"))
+
+        phrases = [p.strip() for p in parsed_args.phrases.split(",")] if parsed_args.phrases else None
+        ack = "" if parsed_args.no_ack else None
+
+        print("\nStarting continuous low-power AutoWakeService daemon...")
+        print("Press Ctrl+C to terminate.")
+        print("-" * 65)
+
+        service = AutoWakeService(
+            on_command=on_command,
+            phrases=phrases,
+            ack_phrase=ack,
+            followup_timeout=parsed_args.timeout,
+            on_status=lambda s: print(f"[{time.strftime('%H:%M:%S')}] {s}"),
+            on_chat=lambda r, t: print(f"[{r.upper()}] {t}"),
+        )
+        service.start()
+        try:
+            while service.is_running:
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            print("\nShutting down AutoWakeService...")
+        finally:
+            service.stop()
+            print("AutoWakeService terminated.\n")
+    elif action == "auto-wake-status":
+        from jarvis.config.settings import get_settings
+        settings = get_settings()
+        print("\nJARVIS Ambient Wake-Word Configuration & Status:")
+        print("=" * 65)
+        print(f"• Auto Wake Enabled:     {'YES' if settings.auto_wake_word else 'NO'}")
+        print(f"• Trigger Phrases:       {settings.wake_phrases}")
+        print(f"• Acknowledgment Prompt: {settings.wake_ack_phrase}")
+        print(f"• Follow-up Timeout:     {settings.wake_followup_timeout}s")
+        print(f"• Silence Energy Gate:   {settings.wake_vad_threshold} (Low-Power VAD)")
+        print(f"• Full-Duplex Barge-in:  {'ENABLED' if settings.voice_barge_in else 'DISABLED'}")
+        print("=" * 65 + "\n")
     else:
-        print("Usage: jarvis voice {speak|listen|wake|session|profiles|set-profile}")
+        print("Usage: jarvis voice {speak|listen|wake|session|profiles|set-profile|auto-wake|auto-wake-status}")
         return 1
     return 0
 

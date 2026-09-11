@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     voice_profile: str = "british_butler"
     voice_rate: str = "+0%"
     voice_pitch: str = "+0Hz"
+    auto_wake_word: bool = True
+    wake_phrases: str = "hey jarvis,jarvis"
+    wake_ack_phrase: str = "Yes, sir?"
+    wake_followup_timeout: float = Field(default=6.0, ge=0.1, le=60.0)
+    wake_vad_threshold: int = Field(default=350, ge=100, le=2000)
 
 
 @lru_cache

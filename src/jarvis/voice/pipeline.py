@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Callable
 
 from jarvis.config.settings import get_settings
+
+logger = logging.getLogger(__name__)
 from jarvis.voice import stt
 from jarvis.voice.duplex import DuplexVoiceSession
 from jarvis.voice.microphone import Microphone
@@ -48,3 +51,27 @@ def voice_loop(on_command: Callable[[str], str]) -> None:
                 command = stt.transcribe(stt.wav_at_16k(user_pcm, 16000))
             else:
                 command = ""
+
+
+def run_auto_wake_service(
+    on_command: Callable[[str], str],
+    phrases: list[str] | None = None,
+    ack_phrase: str | None = None,
+) -> None:
+    """Run continuous AutoWakeService blocking until interrupted."""
+    import time
+    from jarvis.voice.auto_wake import AutoWakeService
+
+    service = AutoWakeService(
+        on_command=on_command,
+        phrases=phrases,
+        ack_phrase=ack_phrase,
+    )
+    service.start()
+    try:
+        while service.is_running:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        logger.info("AutoWakeService interrupted by user.")
+    finally:
+        service.stop()
