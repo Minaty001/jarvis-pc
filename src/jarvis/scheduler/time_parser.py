@@ -83,15 +83,16 @@ def parse_time_expression(expr: str, now: Optional[datetime.datetime] = None) ->
             elif ampm == "am" and hour == 12:
                 hour = 0
 
-        target_date = (now + datetime.timedelta(days=day_offset)).date()
-        target = datetime.datetime.combine(target_date, datetime.time(hour=hour, minute=minute))
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            target_date = (now + datetime.timedelta(days=day_offset)).date()
+            target = datetime.datetime.combine(target_date, datetime.time(hour=hour, minute=minute))
 
-        # If time is earlier than now on the same day and no day was specified, assume next day
-        if target <= now and day_offset == 0:
-            target += datetime.timedelta(days=1)
+            # If time is earlier than now on the same day and no day was specified, assume next day
+            if target <= now and day_offset == 0:
+                target += datetime.timedelta(days=1)
 
-        diff = (target - now).total_seconds()
-        return target, max(1.0, diff)
+            diff = (target - now).total_seconds()
+            return target, max(1.0, diff)
 
     # Fallback default: 5 minutes from now
     default_sec = 300.0

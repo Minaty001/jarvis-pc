@@ -36,6 +36,9 @@ async def synthesize_async(
     if edge_tts is None:
         raise RuntimeError("edge-tts library is not installed or available.")
 
+    if not text or not text.strip():
+        return b""
+
     profile = get_profile_manager().get_active_profile()
     target_voice = voice or profile.voice_id
     target_rate = rate or profile.rate

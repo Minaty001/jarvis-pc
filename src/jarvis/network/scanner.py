@@ -89,10 +89,11 @@ def get_local_ip_and_gateway() -> tuple[str, str]:
                 fields = line.strip().split()
                 if len(fields) >= 3 and fields[1] == "00000000":
                     gw_hex = fields[2]
-                    # Convert little-endian hex to IP
-                    octets = [str(int(gw_hex[i:i+2], 16)) for i in (6, 4, 2, 0)]
-                    gateway_ip = ".".join(octets)
-                    break
+                    if len(gw_hex) >= 8:
+                        # Convert little-endian hex to IP
+                        octets = [str(int(gw_hex[i:i+2], 16)) for i in (6, 4, 2, 0)]
+                        gateway_ip = ".".join(octets)
+                        break
     except Exception:
         pass
 
@@ -114,6 +115,23 @@ def parse_arp_table() -> Dict[str, str]:
                         ip_to_mac[ip] = mac
     except Exception as exc:
         logger.debug("Could not read /proc/net/arp: %s", exc)
+
+    if not ip_to_mac:
+        try:
+            ip_bin = shutil.which("ip") or "/sbin/ip"
+            res = subprocess.run([ip_bin, "neigh", "show"], capture_output=True, text=True, timeout=2.0, check=False)
+            if res.returncode == 0:
+                for line in res.stdout.splitlines():
+                    parts = line.strip().split()
+                    if len(parts) >= 5 and "lladdr" in parts:
+                        idx = parts.index("lladdr")
+                        if idx + 1 < len(parts):
+                            ip = parts[0]
+                            mac = parts[idx + 1].lower()
+                            if len(mac) == 17:
+                                ip_to_mac[ip] = mac
+        except Exception:
+            pass
 
     return ip_to_mac
 
