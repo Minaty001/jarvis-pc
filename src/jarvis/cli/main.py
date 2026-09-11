@@ -220,6 +220,28 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     close_p = ctrl_sub.add_parser("close", help="Close desktop window by title")
     close_p.add_argument("window", help="Window title")
 
+    mem_parser = subparsers.add_parser("memory", help="Long-Term Semantic Memory & User Profile Knowledge Graph")
+    mem_sub = mem_parser.add_subparsers(dest="memory_action", help="Memory action")
+
+    mem_list = mem_sub.add_parser("list", help="List all stored semantic facts and memories")
+    mem_list.add_argument("--category", default=None, help="Filter by category (e.g. preference, personal, work, tools)")
+    mem_list.add_argument("--limit", type=int, default=50, help="Max items to list")
+
+    mem_search = mem_sub.add_parser("search", help="Search memories using BM25 ranking")
+    mem_search.add_argument("query", help="Search query")
+    mem_search.add_argument("--category", default=None, help="Category filter")
+
+    mem_rem = mem_sub.add_parser("remember", help="Save a user preference or fact into memory")
+    mem_rem.add_argument("key", help="Fact key / identifier")
+    mem_rem.add_argument("value", help="Fact value / description")
+    mem_rem.add_argument("--category", default="preference", help="Category (default: preference)")
+
+    mem_forg = mem_sub.add_parser("forget", help="Remove a fact from memory by key or ID")
+    mem_forg.add_argument("target", help="Key or integer Record ID to delete")
+
+    mem_sub.add_parser("profile", help="Show structured operator profile and preferences")
+    mem_sub.add_parser("stats", help="Show memory storage metrics and database path")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.subcommand == "voice":
@@ -696,6 +718,87 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
 
         else:
             print("Usage: jarvis control {volume|brightness|bluetooth|wifi|power|kill|close}")
+            return 1
+
+    if parsed_args.subcommand == "memory":
+        from jarvis.brain.memory import MemoryStore
+        from jarvis.system.paths import get_app_paths
+
+        store = MemoryStore(get_app_paths().state / "memory.db")
+        action = parsed_args.memory_action
+
+        if action == "list":
+            facts = store.list_facts(category=parsed_args.category, limit=parsed_args.limit)
+            if not facts:
+                print("No semantic facts or preferences recorded in memory yet.")
+            else:
+                print(f"\nJARVIS Stored Memories ({len(facts)} entries):")
+                print("=" * 70)
+                for f in facts:
+                    print(f"[{f['id']:>3}] [{f['category'].upper():<10}] {f['key']:<20}: {f['value']}")
+                print("=" * 70 + "\n")
+            return 0
+
+        elif action == "search":
+            results = store.recall_facts(query=parsed_args.query, category=parsed_args.category, limit=10)
+            if not results:
+                print(f"No memories matched '{parsed_args.query}'.")
+            else:
+                print(f"\nMemory Search Results ({len(results)} matches for '{parsed_args.query}'):")
+                print("=" * 70)
+                for r in results:
+                    print(f"• [{r['category'].upper():<10}] {r['key']:<20}: {r['value']} (confidence: {r['confidence']:.2f})")
+                print("=" * 70 + "\n")
+            return 0
+
+        elif action == "remember":
+            fid = store.store_fact(
+                key=parsed_args.key,
+                value=parsed_args.value,
+                category=parsed_args.category,
+                subject="user",
+                predicate="preference",
+                source="cli",
+            )
+            print(f"Memorized [{parsed_args.category}] '{parsed_args.key}': '{parsed_args.value}' (Record ID: {fid}).")
+            return 0
+
+        elif action == "forget":
+            ok = store.delete_fact(parsed_args.target)
+            if ok:
+                print(f"Successfully deleted memory '{parsed_args.target}'.")
+                return 0
+            print(f"Memory '{parsed_args.target}' not found.")
+            return 1
+
+        elif action == "profile":
+            profile = store.get_user_profile()
+            if not profile:
+                print("User profile is currently empty.")
+            else:
+                print("\nJARVIS Operator Profile & Stored Preferences:")
+                print("=" * 65)
+                for cat, items in profile.items():
+                    print(f"\n[{cat.upper()}]")
+                    for k, v in items.items():
+                        print(f"• {k:<22}: {v}")
+                print("=" * 65 + "\n")
+            return 0
+
+        elif action == "stats":
+            summary = store.get_memory_summary()
+            print("\nJARVIS Memory Subsystem Status:")
+            print("=" * 60)
+            print(f"• Semantic Facts & Knowledge: {summary['facts_count']}")
+            print(f"• User Profile Attributes:    {summary['profile_keys_count']}")
+            print(f"• Metacognitive Reflections:  {summary['reflections_count']}")
+            print(f"• Episodic Chat Turns:        {summary['episodes_count']}")
+            print(f"• Database Path:              {summary['db_path']}")
+            print("=" * 60 + "\n")
+            return 0
+
+        else:
+            print("Usage: jarvis memory {list|search|remember|forget|profile|stats}")
             return 1
 
     if parsed_args.subcommand == "telegram":

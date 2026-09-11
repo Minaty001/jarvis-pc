@@ -32,17 +32,47 @@ def build_system_prompt(
     memories: str | None = None,
     tools: str = "",
     user_name: str = "sir",
+    user_profile: dict | None = None,
+    facts: list[dict] | None = None,
 ) -> str:
     """Assemble the full system prompt from the persona plus dynamic sections."""
     sections = [PERSONA.format(user_name=user_name) if "{user_name}" in PERSONA else PERSONA]
+
+    # 1. Operator Profile & Preferences
+    if user_profile:
+        profile_lines = ["## Operator Profile & Preferences"]
+        for cat, items in user_profile.items():
+            if isinstance(items, dict):
+                for k, v in items.items():
+                    profile_lines.append(f"• {k}: {v} ({cat})")
+            else:
+                profile_lines.append(f"• {cat}: {items}")
+        sections.append("\n".join(profile_lines))
+
+    # 2. Relevant Semantic Facts
+    if facts:
+        fact_lines = ["## Relevant Long-Term Knowledge & Facts"]
+        for f in facts:
+            subj = f.get("subject", "user")
+            pred = f.get("predicate", "preference")
+            key = f.get("key", "")
+            val = f.get("value", "")
+            fact_lines.append(f"• [{subj}] {key}: {val} ({pred})")
+        sections.append("\n".join(fact_lines))
+
+    # 3. Dynamic Tool Schemas
     if tools:
         sections.append(
             "## Tools\n"
             "You may call these tools to act on the machine. Call a tool only when it genuinely "
             "advances the request; otherwise answer directly.\n" + tools
         )
+
+    # 4. Episodic / Legacy Memories
     if memories:
         sections.append("## Long-term memory (from prior sessions)\n" + memories)
+
+    # 5. Protocol
     sections.append(
         "## Protocol\n"
         "When you invoke a tool, complete the loop: the results of your calls will be returned to "

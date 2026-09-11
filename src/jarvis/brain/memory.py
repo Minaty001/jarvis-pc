@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 
 MAX_EPISODES = 500
 MAX_REFLECTIONS = 200
+MAX_FACTS = 1000
 
 
 def _open(path: Path) -> sqlite3.Connection:
@@ -40,6 +41,24 @@ def _open(path: Path) -> sqlite3.Connection:
     conn.execute(
         "CREATE VIRTUAL TABLE IF NOT EXISTS reflections_fts USING fts5("
         "goal_query, lesson, content='reflections', content_rowid='id')"
+    )
+
+    # Long-term semantic facts and entity relational knowledge graph
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS facts ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER, subject TEXT, "
+        "predicate TEXT, key TEXT, value TEXT, category TEXT, confidence REAL, "
+        "source TEXT)"
+    )
+    conn.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5("
+        "subject, predicate, key, value, category, content='facts', content_rowid='id')"
+    )
+
+    # Key-value user profile summary table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS user_profile ("
+        "key TEXT PRIMARY KEY, value TEXT, category TEXT, updated_at INTEGER)"
     )
     conn.commit()
     return conn
@@ -239,6 +258,228 @@ class MemoryStore:
             except sqlite3.OperationalError:
                 return []
 
+    # ── Long-term Semantic Facts & User Profile Knowledge Graph ─────────
+    def store_fact(
+        self,
+        key: str,
+        value: str,
+        category: str = "general",
+        subject: str = "user",
+        predicate: str = "preference",
+        confidence: float = 1.0,
+        source: str = "conversation",
+    ) -> int:
+        """Store or update a long-term semantic fact / preference in SQLite FTS5."""
+        clean_key = key.strip()
+        clean_val = value.strip()
+        clean_cat = category.strip().lower()
+        clean_subj = subject.strip().lower()
+        clean_pred = predicate.strip().lower()
+        now = int(time.time())
+
+        with self._lock:
+            # Check for existing fact with matching subject and key
+            row = self._conn.execute(
+                "SELECT id FROM facts WHERE subject = ? AND key = ?",
+                (clean_subj, clean_key),
+            ).fetchone()
+
+            if row:
+                fact_id = row[0]
+                self._conn.execute(
+                    "UPDATE facts SET ts = ?, predicate = ?, value = ?, category = ?, confidence = ?, source = ? WHERE id = ?",
+                    (now, clean_pred, clean_val, clean_cat, confidence, source, fact_id),
+                )
+                self._conn.execute(
+                    "UPDATE facts_fts SET subject = ?, predicate = ?, key = ?, value = ?, category = ? WHERE rowid = ?",
+                    (clean_subj, clean_pred, clean_key, clean_val, clean_cat, fact_id),
+                )
+            else:
+                cur = self._conn.execute(
+                    "INSERT INTO facts (ts, subject, predicate, key, value, category, confidence, source) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (now, clean_subj, clean_pred, clean_key, clean_val, clean_cat, confidence, source),
+                )
+                fact_id = cur.lastrowid
+                self._conn.execute(
+                    "INSERT INTO facts_fts (rowid, subject, predicate, key, value, category) VALUES (?, ?, ?, ?, ?, ?)",
+                    (fact_id, clean_subj, clean_pred, clean_key, clean_val, clean_cat),
+                )
+
+            # If this is a user property/preference, keep user_profile table in sync
+            if clean_subj == "user":
+                self._conn.execute(
+                    "INSERT INTO user_profile (key, value, category, updated_at) VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value, category = excluded.category, updated_at = excluded.updated_at",
+                    (clean_key, clean_val, clean_cat, now),
+                )
+
+            self._conn.commit()
+            self._trim_facts()
+            return fact_id
+
+    def recall_facts(
+        self,
+        query: str,
+        category: Optional[str] = None,
+        limit: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """Recall relevant semantic facts using FTS5 BM25 ranking."""
+        terms = [t for t in query.split() if t]
+        if not terms:
+            return []
+        escaped_terms = [t.replace('"', '""') for t in terms]
+        match = " OR ".join(f'"{t}"' for t in escaped_terms)
+        with self._lock:
+            try:
+                if category:
+                    rows = self._conn.execute(
+                        "SELECT f.id, f.ts, f.subject, f.predicate, f.key, f.value, f.category, f.confidence "
+                        "FROM facts f JOIN facts_fts fts ON f.id = fts.rowid "
+                        "WHERE facts_fts MATCH ? AND f.category = ? "
+                        "ORDER BY bm25(facts_fts) ASC, f.confidence DESC LIMIT ?",
+                        (match, category.strip().lower(), limit),
+                    ).fetchall()
+                else:
+                    rows = self._conn.execute(
+                        "SELECT f.id, f.ts, f.subject, f.predicate, f.key, f.value, f.category, f.confidence "
+                        "FROM facts f JOIN facts_fts fts ON f.id = fts.rowid "
+                        "WHERE facts_fts MATCH ? "
+                        "ORDER BY bm25(facts_fts) ASC, f.confidence DESC LIMIT ?",
+                        (match, limit),
+                    ).fetchall()
+
+                return [
+                    {
+                        "id": r[0],
+                        "ts": r[1],
+                        "subject": r[2],
+                        "predicate": r[3],
+                        "key": r[4],
+                        "value": r[5],
+                        "category": r[6],
+                        "confidence": r[7],
+                    }
+                    for r in rows
+                ]
+            except sqlite3.OperationalError:
+                return []
+
+    def list_facts(
+        self,
+        category: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """List stored facts ordered by recent update."""
+        with self._lock:
+            try:
+                if category:
+                    rows = self._conn.execute(
+                        "SELECT id, ts, subject, predicate, key, value, category, confidence, source "
+                        "FROM facts WHERE category = ? ORDER BY id DESC LIMIT ?",
+                        (category.strip().lower(), limit),
+                    ).fetchall()
+                else:
+                    rows = self._conn.execute(
+                        "SELECT id, ts, subject, predicate, key, value, category, confidence, source "
+                        "FROM facts ORDER BY id DESC LIMIT ?",
+                        (limit,),
+                    ).fetchall()
+
+                return [
+                    {
+                        "id": r[0],
+                        "ts": r[1],
+                        "subject": r[2],
+                        "predicate": r[3],
+                        "key": r[4],
+                        "value": r[5],
+                        "category": r[6],
+                        "confidence": r[7],
+                        "source": r[8],
+                    }
+                    for r in rows
+                ]
+            except sqlite3.OperationalError:
+                return []
+
+    def delete_fact(self, key_or_id: str | int) -> bool:
+        """Delete a fact by integer ID or by key name."""
+        with self._lock:
+            try:
+                if isinstance(key_or_id, int) or (isinstance(key_or_id, str) and key_or_id.isdigit()):
+                    fid = int(key_or_id)
+                    row = self._conn.execute("SELECT key, subject FROM facts WHERE id = ?", (fid,)).fetchone()
+                    if not row:
+                        return False
+                    f_key, f_subj = row
+                    self._conn.execute("DELETE FROM facts_fts WHERE rowid = ?", (fid,))
+                    self._conn.execute("DELETE FROM facts WHERE id = ?", (fid,))
+                    if f_subj == "user":
+                        self._conn.execute("DELETE FROM user_profile WHERE key = ?", (f_key,))
+                    self._conn.commit()
+                    return True
+                else:
+                    target_key = str(key_or_id).strip()
+                    rows = self._conn.execute("SELECT id, subject FROM facts WHERE key = ?", (target_key,)).fetchall()
+                    if not rows:
+                        # Check user_profile
+                        self._conn.execute("DELETE FROM user_profile WHERE key = ?", (target_key,))
+                        self._conn.commit()
+                        return False
+                    for fid, f_subj in rows:
+                        self._conn.execute("DELETE FROM facts_fts WHERE rowid = ?", (fid,))
+                        self._conn.execute("DELETE FROM facts WHERE id = ?", (fid,))
+                    self._conn.execute("DELETE FROM user_profile WHERE key = ?", (target_key,))
+                    self._conn.commit()
+                    return True
+            except sqlite3.OperationalError:
+                return False
+
+    def get_user_profile(self) -> Dict[str, Any]:
+        """Return structured dictionary of the user profile and preferences."""
+        with self._lock:
+            try:
+                rows = self._conn.execute(
+                    "SELECT key, value, category, updated_at FROM user_profile ORDER BY category, key"
+                ).fetchall()
+                profile: Dict[str, Any] = {}
+                for key, val, cat, upd in rows:
+                    if cat not in profile:
+                        profile[cat] = {}
+                    profile[cat][key] = val
+                return profile
+            except sqlite3.OperationalError:
+                return {}
+
+    def update_profile_entry(self, key: str, value: str, category: str = "preference") -> None:
+        """Set or update a user profile field."""
+        self.store_fact(key=key, value=value, category=category, subject="user", predicate="preference")
+
+    def get_memory_summary(self) -> Dict[str, Any]:
+        """Return metrics and counts across all memory subsystems."""
+        with self._lock:
+            try:
+                ep_count = self._conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0]
+                ref_count = self._conn.execute("SELECT COUNT(*) FROM reflections").fetchone()[0]
+                fact_count = self._conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
+                prof_count = self._conn.execute("SELECT COUNT(*) FROM user_profile").fetchone()[0]
+                return {
+                    "episodes_count": ep_count,
+                    "reflections_count": ref_count,
+                    "facts_count": fact_count,
+                    "profile_keys_count": prof_count,
+                    "db_path": str(self.path),
+                }
+            except sqlite3.OperationalError:
+                return {
+                    "episodes_count": 0,
+                    "reflections_count": 0,
+                    "facts_count": 0,
+                    "profile_keys_count": 0,
+                    "db_path": str(self.path),
+                }
+
     def _trim(self) -> None:
         with self._lock:
             excess = self._conn.execute(
@@ -263,6 +504,19 @@ class MemoryStore:
             ids = [row[0] for row in excess]
             self._conn.execute(f"DELETE FROM reflections_fts WHERE rowid IN ({placeholders})", ids)  # nosec B608
             self._conn.execute(f"DELETE FROM reflections WHERE id IN ({placeholders})", ids)  # nosec B608
+            self._conn.commit()
+
+    def _trim_facts(self) -> None:
+        with self._lock:
+            excess = self._conn.execute(
+                "SELECT id FROM facts ORDER BY id DESC LIMIT -1 OFFSET ?", (MAX_FACTS,)
+            ).fetchall()
+            if not excess:
+                return
+            placeholders = ",".join("?" for _ in excess)
+            ids = [row[0] for row in excess]
+            self._conn.execute(f"DELETE FROM facts_fts WHERE rowid IN ({placeholders})", ids)  # nosec B608
+            self._conn.execute(f"DELETE FROM facts WHERE id IN ({placeholders})", ids)  # nosec B608
             self._conn.commit()
 
     def close(self) -> None:

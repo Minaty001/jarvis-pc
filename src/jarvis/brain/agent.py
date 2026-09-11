@@ -290,10 +290,14 @@ class JarvisAgent:
 
         schemas = _tool_schemas(self.executor.registry)
         memories = self.memory.recall(user_text) if self.memory else None
+        facts = self.memory.recall_facts(user_text) if self.memory and hasattr(self.memory, "recall_facts") else None
+        profile = self.memory.get_user_profile() if self.memory and hasattr(self.memory, "get_user_profile") else None
 
         system = build_system_prompt(
             memories="\n".join(memories) if memories else None,
             tools=_tools_brief(schemas),
+            user_profile=profile,
+            facts=facts,
         )
         messages: list[dict] = [
             {"role": "system", "content": system},
@@ -347,6 +351,12 @@ class JarvisAgent:
             self.task_store.set_status(session_id, "completed")
         if self.memory:
             self.memory.add(user_text, reply)
+            try:
+                from jarvis.brain.memory_extractor import MemoryExtractor
+                extractor = MemoryExtractor(llm_client=self.client)
+                await extractor.extract_and_store(user_text, reply, self.memory)
+            except Exception as exc:
+                logger.debug("Background memory extraction error: %s", exc)
         return reply
 
     async def run_goal(self, goal: str, session_id: str | None = None) -> str:

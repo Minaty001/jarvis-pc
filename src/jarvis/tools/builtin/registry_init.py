@@ -62,6 +62,12 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         set_display_brightness,
         set_system_volume,
     )
+    from jarvis.tools.builtin.memory_tools import (
+        forget_fact,
+        get_user_profile,
+        recall_facts,
+        remember_fact,
+    )
     from pathlib import Path
 
     # Create a default file store rooted at user home
@@ -372,4 +378,28 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.CONFIRM,
         capabilities=frozenset({"system.process"}),
         handler=manage_process,
+    ))
+    registry.register(ToolDefinition(
+        name="remember_fact",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"memory.manage"}),
+        handler=remember_fact,
+    ))
+    registry.register(ToolDefinition(
+        name="recall_facts",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"memory.read"}),
+        handler=recall_facts,
+    ))
+    registry.register(ToolDefinition(
+        name="forget_fact",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"memory.manage"}),
+        handler=forget_fact,
+    ))
+    registry.register(ToolDefinition(
+        name="get_user_profile",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"memory.read"}),
+        handler=get_user_profile,
     ))
