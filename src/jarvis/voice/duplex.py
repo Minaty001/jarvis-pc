@@ -118,7 +118,10 @@ class BargeInDetector:
     ):
         self.mode = mode
         self.sensitivity = sensitivity
-        self.detector = WakeWordDetector(wake_phrases or BARGE_IN_WAKE_WORDS)
+        try:
+            self.detector: Optional[WakeWordDetector] = WakeWordDetector(wake_phrases or BARGE_IN_WAKE_WORDS)
+        except Exception:
+            self.detector = None
 
     def is_barge_in(self, mic_chunk: np.ndarray, is_speaking: bool = True) -> bool:
         """Determine whether the audio chunk indicates a user interruption."""
@@ -126,7 +129,7 @@ class BargeInDetector:
             return False
 
         # 1. Wake word / Stop word detection
-        if self.mode in ("wake_only", "vad_and_wake"):
+        if self.mode in ("wake_only", "vad_and_wake") and self.detector is not None:
             try:
                 if self.detector.feed(mic_chunk.tobytes()):
                     logger.info("Barge-in triggered via wake/stop phrase.")
