@@ -21,12 +21,10 @@ async def get_weather(location: str = "auto") -> str:
             f"• Humidity:    {res['humidity']}\n"
             f"• Wind:        {res['wind']}"
         )
-    return (
-        f"Weather for {res.get('location', location)}: {res.get('condition', 'Clear')}, "
-        f"{res.get('temperature_c', '22')}°C."
-    )
+    loc = res.get("location", location)
+    return f"Weather for {loc}: {res.get('condition', 'Clear')}, {res.get('temperature_c', '22')}°C."
 
 
 async def get_daily_briefing(location: str = "auto") -> str:
     """Generate a complete situational daily briefing (time, date, weather, system health)."""
-    return await generate_briefing(location=location if location != "auto" else None)
+    return await generate_briefing(location=None if location == "auto" else location)

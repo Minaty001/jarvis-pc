@@ -5,15 +5,11 @@ import psutil
 
 def find_processes(name: str | None = None, limit: int = 50) -> list[dict]:
     """List matching processes; with no name, summarize the full set."""
-    result: list[dict] = []
+    procs: list[dict] = []
     for process in psutil.process_iter(["pid", "name", "username"]):
         try:
-            info = process.info
-            if name is not None and info.get("name") != name:
-                continue
-            result.append(info)
+            if name is None or process.info.get("name") == name:
+                procs.append(process.info)
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
-    if name is not None:
-        return result
-    return [{"total": len(result)}, {"sample": result[:limit]}]
+    return procs if name is not None else [{"total": len(procs)}, {"sample": procs[:limit]}]
