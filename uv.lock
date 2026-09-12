@@ -635,6 +635,7 @@ name = "jarvis-pc"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "apscheduler" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "psutil" },
@@ -667,6 +668,7 @@ voice = [
 
 [package.metadata]
 requires-dist = [
+    { name = "apscheduler", specifier = ">=3.10.0,<4" },
     { name = "apscheduler", marker = "extra == 'scheduler'", specifier = ">=3.10.0,<4" },
     { name = "edge-tts", marker = "extra == 'voice'", specifier = ">=6.0.0" },
     { name = "fastapi", specifier = ">=0.110.0" },
