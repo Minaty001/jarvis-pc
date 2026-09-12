@@ -3,7 +3,7 @@ import os
 import threading
 import time
 import warnings
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Optional
 
 # Suppress onnxruntime provider warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="onnxruntime")
@@ -31,13 +31,12 @@ class WakeWordDetector:
     def __init__(
         self,
         wake_words: Optional[List[str]] = None,
-        threshold: float = 0.30,
+        threshold: float = 0.35,
         debounce_seconds: float = 1.5,
         sample_rate: int = 16000,
         chunk_size: int = 1280,
         device: Optional[int | str] = None,
         on_wake_word: Optional[Callable[[str, float], None]] = None,
-        auto_gain: bool = True,
         auto_start: bool = False,
     ) -> None:
         """Initialize WakeWordDetector."""
@@ -48,7 +47,6 @@ class WakeWordDetector:
         self.chunk_size = chunk_size
         self.device = device
         self.on_wake_word = on_wake_word
-        self.auto_gain = auto_gain
 
         self._running = False
         self._thread: Optional[threading.Thread] = None
@@ -91,18 +89,6 @@ class WakeWordDetector:
         except Exception as err:
             logger.error("Error resetting wake word model: %s", err)
 
-    def _apply_dynamic_gain(self, audio_chunk: np.ndarray, target_rms: float = 1600.0, max_gain: float = 3.5) -> np.ndarray:
-        """Apply dynamic software gain for low-volume microphones like Bluetooth headsets."""
-        if not self.auto_gain:
-            return audio_chunk
-            
-        rms = np.sqrt(np.mean(audio_chunk.astype(float) ** 2)) if len(audio_chunk) > 0 else 0
-        if 60.0 < rms < target_rms:
-            gain = min(max_gain, max(1.0, target_rms / max(rms, 1.0)))
-            amplified = audio_chunk.astype(float) * gain
-            return np.clip(amplified, -32767, 32767).astype(np.int16)
-        return audio_chunk
-
     def _audio_callback(self, in_data, frames, time_info, status) -> None:
         """Process incoming audio chunk from sounddevice stream."""
         if status:
@@ -111,17 +97,15 @@ class WakeWordDetector:
         if not self._running:
             return
 
-        # Convert raw buffer to int16 numpy array
-        raw_chunk = np.frombuffer(in_data, dtype=np.int16)
-        audio_chunk = self._apply_dynamic_gain(raw_chunk)
+        # Convert raw buffer to pristine int16 numpy array
+        audio_chunk = np.frombuffer(in_data, dtype=np.int16)
         
         # Periodic audio energy check for live monitoring
         now = time.time()
         if hasattr(self, "_last_energy_log") and (now - self._last_energy_log) >= 5.0:
             self._last_energy_log = now
-            raw_rms = np.sqrt(np.mean(raw_chunk.astype(float) ** 2)) if len(raw_chunk) > 0 else 0
-            boosted_rms = np.sqrt(np.mean(audio_chunk.astype(float) ** 2)) if len(audio_chunk) > 0 else 0
-            logger.info("🎤 Listening active | Mic RMS: %.1f (Boosted: %.1f) | Target: 'hey_jarvis' (Threshold: %.2f)", raw_rms, boosted_rms, self.threshold)
+            rms = np.sqrt(np.mean(audio_chunk.astype(float) ** 2)) if len(audio_chunk) > 0 else 0
+            logger.info("🎤 Listening active | Mic RMS: %.1f | Target: 'hey_jarvis' (Threshold: %.2f)", rms, self.threshold)
         elif not hasattr(self, "_last_energy_log"):
             self._last_energy_log = now
 
@@ -130,11 +114,11 @@ class WakeWordDetector:
             predictions = self.model.predict(audio_chunk)
 
             for raw_name, score in predictions.items():
-                if score >= self.threshold:
+                is_target = any(target.lower() in raw_name.lower() for target in self.wake_words) or "jarvis" in raw_name.lower()
+                if is_target and score >= self.threshold:
                     if (now - self._last_trigger_time) >= self.debounce_seconds:
                         self._last_trigger_time = now
-                        clean_name = raw_name.replace("_v0.1", "")
-                        self._handle_detection(clean_name, float(score))
+                        self._handle_detection("hey_jarvis", float(score))
         except Exception as err:
             logger.error("Error during inference: %s", err)
 
