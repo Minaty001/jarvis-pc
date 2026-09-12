@@ -2,7 +2,8 @@
 
 from jarvis.macros.models import MacroDefinition, MacroStep, StepType
 from jarvis.macros.store import MacroStore
-from jarvis.macros.engine import MacroEngine, MacroExecutionResult
+from jarvis.macros.engine import MacroEngine, MacroExecutionResult, render_template
+from jarvis.macros.recorder import MacroRecorder
 
 __all__ = [
     "MacroDefinition",
@@ -11,4 +12,6 @@ __all__ = [
     "MacroStore",
     "MacroEngine",
     "MacroExecutionResult",
+    "MacroRecorder",
+    "render_template",
 ]

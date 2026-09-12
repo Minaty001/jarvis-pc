@@ -54,9 +54,12 @@ def register_all_builtins(registry: ToolRegistry) -> None:
     )
     from jarvis.tools.builtin.macro_tools import (
         create_macro,
+        create_multi_app_workflow,
         delete_macro,
         list_macros,
         run_macro,
+        start_recording_macro,
+        stop_recording_macro,
         toggle_macro,
     )
     from jarvis.tools.builtin.system_control_tools import (
@@ -362,6 +365,24 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"macros.manage"}),
         handler=toggle_macro,
+    ))
+    registry.register(ToolDefinition(
+        name="create_multi_app_workflow",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"macros.manage", "system.launch"}),
+        handler=create_multi_app_workflow,
+    ))
+    registry.register(ToolDefinition(
+        name="start_recording_macro",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"macros.manage"}),
+        handler=start_recording_macro,
+    ))
+    registry.register(ToolDefinition(
+        name="stop_recording_macro",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"macros.manage"}),
+        handler=stop_recording_macro,
     ))
     registry.register(ToolDefinition(
         name="set_system_volume",

@@ -15,6 +15,13 @@ class StepType(str, Enum):
     PAUSE = "pause"
     OPEN_APP = "open_app"
     OPEN_URL = "open_url"
+    MOUSE_CLICK = "mouse_click"
+    MOUSE_MOVE = "mouse_move"
+    TYPE_TEXT = "type_text"
+    KEY_COMBO = "key_combo"
+    FOCUS_WINDOW = "focus_window"
+    WAIT_FOR_WINDOW = "wait_for_window"
+    ASSERT_PROCESS = "assert_process"
 
 
 @dataclass
@@ -24,6 +31,7 @@ class MacroStep:
     args: Dict[str, Any] = field(default_factory=dict)
     timeout: float = 30.0
     ignore_errors: bool = False
+    retries: int = 0
     description: str = ""
 
     @classmethod
@@ -36,6 +44,7 @@ class MacroStep:
             args=data.get("args", {}),
             timeout=float(data.get("timeout", 30.0)),
             ignore_errors=bool(data.get("ignore_errors", False)),
+            retries=int(data.get("retries", 0)),
             description=data.get("description", ""),
         )
 
@@ -46,6 +55,7 @@ class MacroStep:
             "args": self.args,
             "timeout": self.timeout,
             "ignore_errors": self.ignore_errors,
+            "retries": self.retries,
             "description": self.description,
         }
 
@@ -56,6 +66,7 @@ class MacroDefinition:
     description: str = ""
     triggers: List[str] = field(default_factory=list)
     steps: List[MacroStep] = field(default_factory=list)
+    variables: Dict[str, Any] = field(default_factory=dict)
     confirmation_required: bool = False
     enabled: bool = True
     created_at: int = 0
@@ -69,6 +80,7 @@ class MacroDefinition:
             description=data.get("description", ""),
             triggers=data.get("triggers", []),
             steps=steps,
+            variables=data.get("variables", {}),
             confirmation_required=bool(data.get("confirmation_required", False)),
             enabled=bool(data.get("enabled", True)),
             created_at=int(data.get("created_at", 0)),
@@ -80,6 +92,7 @@ class MacroDefinition:
             "description": self.description,
             "triggers": self.triggers,
             "steps": [s.to_dict() for s in self.steps],
+            "variables": self.variables,
             "confirmation_required": self.confirmation_required,
             "enabled": self.enabled,
             "created_at": self.created_at,

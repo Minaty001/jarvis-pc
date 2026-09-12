@@ -39,13 +39,70 @@ def list_macros() -> str:
     return "\n".join(lines)
 
 
-def run_macro(macro_name: str) -> str:
-    """Trigger and execute an automated workflow macro by name."""
+def run_macro(macro_name: str, variables: Optional[Dict[str, Any]] = None) -> str:
+    """Trigger and execute an automated workflow macro by name with optional variables."""
     engine = _get_engine()
-    res = engine.execute_macro(macro_name.strip())
+    res = engine.execute_macro(macro_name.strip(), variables=variables)
     if res.success:
         return f"Macro '{res.macro_name}' executed successfully ({res.steps_completed}/{res.total_steps} steps completed)."
     return f"Macro '{res.macro_name}' failed: {res.error}"
+
+
+def create_multi_app_workflow(
+    name: str,
+    apps: List[str] | str,
+    urls: Optional[List[str] | str] = None,
+    initial_speech: Optional[str] = None,
+    description: str = "",
+) -> str:
+    """Orchestrate and save a multi-application desktop workflow in one command."""
+    from jarvis.macros.models import StepType
+    engine = _get_engine()
+
+    app_list = [a.strip() for a in (apps.split(",") if isinstance(apps, str) else apps) if a.strip()]
+    url_list = []
+    if urls:
+        url_list = [u.strip() for u in (urls.split(",") if isinstance(urls, str) else urls) if u.strip()]
+
+    steps: List[MacroStep] = []
+    if initial_speech:
+        steps.append(MacroStep(type=StepType.SPEAK, target=initial_speech.strip(), description="Initial voice announcement"))
+
+    for app in app_list:
+        steps.append(MacroStep(type=StepType.OPEN_APP, target=app, description=f"Launch {app}"))
+        steps.append(MacroStep(type=StepType.PAUSE, target="1.0", description="Wait for app init"))
+
+    for url in url_list:
+        steps.append(MacroStep(type=StepType.OPEN_URL, target=url, description=f"Open {url}"))
+
+    clean_name = name.strip().lower().replace(" ", "_")
+    macro = MacroDefinition(
+        name=clean_name,
+        description=description or f"Multi-app workflow launching {', '.join(app_list)}",
+        triggers=[clean_name.replace("_", " "), f"launch {clean_name.replace('_', ' ')}"],
+        steps=steps,
+        enabled=True,
+    )
+    engine.store.save_macro(macro)
+    return f"Multi-app workflow '{clean_name}' created with {len(app_list)} apps and {len(url_list)} URLs ({len(steps)} steps)."
+
+
+def start_recording_macro(name: str, description: str = "") -> str:
+    """Start an interactive macro recording session to capture upcoming user actions."""
+    from jarvis.macros.recorder import MacroRecorder
+    recorder = MacroRecorder.get_instance(store=_get_engine().store)
+    recorder.start_recording(name=name, description=description)
+    return f"Macro recording session started for '{name}'. Perform actions or use record tools, then call stop_recording_macro."
+
+
+def stop_recording_macro() -> str:
+    """Finish the active macro recording session and save the captured workflow definition."""
+    from jarvis.macros.recorder import MacroRecorder
+    recorder = MacroRecorder.get_instance(store=_get_engine().store)
+    macro_def = recorder.stop_recording(save=True)
+    if not macro_def:
+        return "No active macro recording session found."
+    return f"Macro recording completed and saved as '{macro_def.name}' with {len(macro_def.steps)} steps."
 
 
 def create_macro(

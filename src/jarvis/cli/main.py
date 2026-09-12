@@ -183,6 +183,19 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     
     m_run = macro_sub.add_parser("run", help="Execute a workflow macro by name")
     m_run.add_argument("name", help="Macro name (e.g. coding_mode, meeting_prep, lockdown, health_check)")
+    m_run.add_argument("--var", action="append", help="Dynamic variable in key=value format (can be repeated)")
+
+    m_ws = macro_sub.add_parser("create-workspace", help="Create a multi-app desktop workspace workflow")
+    m_ws.add_argument("name", help="Workflow name (e.g. dev_mode)")
+    m_ws.add_argument("--apps", required=True, help="Comma-separated app names (e.g. code,firefox,gnome-terminal)")
+    m_ws.add_argument("--urls", help="Comma-separated URLs to open")
+    m_ws.add_argument("--speech", help="Initial voice greeting announcement")
+
+    m_record = macro_sub.add_parser("record", help="Start an interactive macro recording session")
+    m_record.add_argument("name", help="Macro name to record")
+    m_record.add_argument("--desc", default="", help="Description")
+
+    macro_sub.add_parser("stop", help="Stop macro recording session and save definition")
 
     m_show = macro_sub.add_parser("show", help="Display details and steps of a workflow macro")
     m_show.add_argument("name", help="Macro name")
@@ -635,6 +648,14 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
             macro_name = parsed_args.name
             print(f"\n[JARVIS Macro] Executing workflow macro: '{macro_name}'...")
 
+            # Parse runtime variables from --var key=value
+            runtime_vars = {}
+            if getattr(parsed_args, "var", None):
+                for item in parsed_args.var:
+                    if "=" in item:
+                        k, v = item.split("=", 1)
+                        runtime_vars[k.strip()] = v.strip()
+
             def on_step_progress(idx, step, out):
                 print(f"  [{idx}/{len(macro_obj.steps)}] {step.type.value.upper()}: {step.description or step.target} -> {out[:80]}")
 
@@ -643,7 +664,7 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
                 print(f"Error: Workflow macro '{macro_name}' not found.")
                 return 1
 
-            res = engine.execute_macro(macro_obj, on_step=on_step_progress)
+            res = engine.execute_macro(macro_obj, variables=runtime_vars, on_step=on_step_progress)
             print("=" * 70)
             if res.success:
                 print(f"Status: SUCCESS ({res.steps_completed}/{res.total_steps} steps executed)")
@@ -651,6 +672,29 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
                 print(f"Status: FAILED ({res.error})")
             print("=" * 70 + "\n")
             return 0 if res.success else 1
+
+        elif parsed_args.macro_action == "create-workspace":
+            from jarvis.tools.builtin.macro_tools import create_multi_app_workflow
+            res = create_multi_app_workflow(
+                name=parsed_args.name,
+                apps=parsed_args.apps,
+                urls=getattr(parsed_args, "urls", None),
+                initial_speech=getattr(parsed_args, "speech", None),
+            )
+            print(f"\n[JARVIS Macro] {res}\n")
+            return 0
+
+        elif parsed_args.macro_action == "record":
+            from jarvis.tools.builtin.macro_tools import start_recording_macro
+            res = start_recording_macro(name=parsed_args.name, description=parsed_args.desc)
+            print(f"\n[JARVIS Macro] {res}\n")
+            return 0
+
+        elif parsed_args.macro_action == "stop":
+            from jarvis.tools.builtin.macro_tools import stop_recording_macro
+            res = stop_recording_macro()
+            print(f"\n[JARVIS Macro] {res}\n")
+            return 0
 
         elif parsed_args.macro_action == "show":
             macro_obj = engine.store.get_macro(parsed_args.name)
@@ -662,9 +706,12 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
             print(f"• Description: {macro_obj.description}")
             print(f"• Enabled:     {macro_obj.enabled}")
             print(f"• Triggers:    {', '.join(macro_obj.triggers)}")
+            if macro_obj.variables:
+                print(f"• Variables:   {macro_obj.variables}")
             print("\nPipeline Steps:")
             for idx, s in enumerate(macro_obj.steps, start=1):
-                print(f"  {idx}. [{s.type.value.upper()}] target='{s.target}' args={s.args}")
+                retry_str = f" [retries={s.retries}]" if s.retries else ""
+                print(f"  {idx}. [{s.type.value.upper()}] target='{s.target}' args={s.args}{retry_str}")
             print("=" * 70 + "\n")
             return 0
 
@@ -680,7 +727,7 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
             return 0
 
         else:
-            print("Usage: jarvis macro {list|run|show|toggle}")
+            print("Usage: jarvis macro {list|run|create-workspace|record|stop|show|toggle}")
             return 1
 
     if parsed_args.subcommand == "control":
