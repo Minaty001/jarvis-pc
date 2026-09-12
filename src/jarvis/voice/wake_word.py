@@ -1,4 +1,4 @@
-"""Wake word detection via Vosk keyword-spotting grammar with automatic model download & acoustic VAD fallback."""
+"""Wake word detection via Vosk keyword-spotting grammar with automatic model download."""
 
 from __future__ import annotations
 
@@ -51,9 +51,14 @@ def download_vosk_model(target_dir: Optional[str] = None) -> bool:
             with urllib.request.urlopen(req, timeout=30.0) as resp:  # nosec B310
                 zip_data = resp.read()
 
+            target_parent = dest_path.parent.resolve()
             with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
+                for member in zf.infolist():
+                    member_path = (target_parent / member.filename).resolve()
+                    if not str(member_path).startswith(str(target_parent)):
+                        raise ValueError(f"Malicious zip member path detected: {member.filename}")
                 # Extract into parent directory since zip contains top-level 'vosk-model-small-en-us-0.15'
-                zf.extractall(dest_path.parent)
+                zf.extractall(target_parent)
 
             logger.info("Vosk model successfully extracted to %s", dest_path)
             return True
@@ -89,11 +94,10 @@ def get_model(model_dir: str | None = None) -> Optional[Any]:
 
 
 class WakeWordDetector:
-    """Keyword spotter with Vosk grammar matching and intelligent acoustic VAD fallback."""
+    """Keyword spotter with Vosk grammar matching."""
 
     def __init__(self, phrases: list[str] | None = None, model_dir: str | None = None) -> None:
         self.phrases = [p.lower().strip() for p in (phrases or DEFAULT_PHRASES) if p.strip()]
-        self._consecutive_speech_frames = 0
         self._model = get_model(model_dir)
 
         if self._model is not None and KaldiRecognizer is not None:
@@ -106,6 +110,11 @@ class WakeWordDetector:
         else:
             self._recognizer = None
 
+    @property
+    def is_available(self) -> bool:
+        """Return True if wake word model and recognizer are initialized."""
+        return self._recognizer is not None
+
     def _matches(self, text: str) -> bool:
         clean = text.lower().strip()
         if not clean or clean == "[unk]":
@@ -114,37 +123,22 @@ class WakeWordDetector:
 
     def feed(self, frame: bytes) -> bool:
         """Feed one 16 kHz int16 mono frame. Returns True when the wake word fires."""
-        # 1. Primary: Vosk keyword spotting
-        if self._recognizer is not None:
-            try:
-                if self._recognizer.AcceptWaveform(frame):
-                    text = json.loads(self._recognizer.Result()).get("text", "")
-                    if self._matches(text):
-                        self._recognizer.Reset()
-                        return True
-                else:
-                    partial = json.loads(self._recognizer.PartialResult()).get("partial", "")
-                    if self._matches(partial):
-                        self._recognizer.Reset()
-                        return True
-            except Exception as ex:
-                logger.debug("Wake word feed error: %s", ex)
+        if self._recognizer is None:
+            # Fail closed: never trigger wake word on noise when speech recognizer is unavailable
+            return False
 
-        # 2. Resilient Fallback: Acoustic speech detection when offline model is absent
-        else:
-            try:
-                pcm = np.frombuffer(frame, dtype=np.int16)
-                if len(pcm) > 0:
-                    rms = float(np.sqrt(np.mean(pcm.astype(float) ** 2)))
-                    if rms >= 450.0:
-                        self._consecutive_speech_frames += 1
-                        # 3 consecutive chunks (~240ms) of sustained human vocalization triggers wake
-                        if self._consecutive_speech_frames >= 3:
-                            self._consecutive_speech_frames = 0
-                            return True
-                    else:
-                        self._consecutive_speech_frames = max(0, self._consecutive_speech_frames - 1)
-            except Exception:
-                pass
+        try:
+            if self._recognizer.AcceptWaveform(frame):
+                text = json.loads(self._recognizer.Result()).get("text", "")
+                if self._matches(text):
+                    self._recognizer.Reset()
+                    return True
+            else:
+                partial = json.loads(self._recognizer.PartialResult()).get("partial", "")
+                if self._matches(partial):
+                    self._recognizer.Reset()
+                    return True
+        except Exception as ex:
+            logger.debug("Wake word feed error: %s", ex)
 
         return False

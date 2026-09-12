@@ -87,10 +87,22 @@ async def fetch_briefing_context(location: Optional[str] = None) -> Dict[str, An
     weather = await fetch_weather(loc)
 
     # System Health
-    cpu = psutil.cpu_percent(interval=None)
-    ram = psutil.virtual_memory().percent
-    disk = psutil.disk_usage("/").percent
-    battery = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
+    try:
+        cpu = psutil.cpu_percent(interval=None)
+    except Exception:
+        cpu = 0.0
+    try:
+        ram = psutil.virtual_memory().percent
+    except Exception:
+        ram = 0.0
+    try:
+        disk = psutil.disk_usage("/").percent
+    except Exception:
+        disk = 0.0
+    try:
+        battery = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
+    except Exception:
+        battery = None
 
     battery_str = f"{battery.percent:.0f}%" if battery else "N/A (AC Connected)"
 

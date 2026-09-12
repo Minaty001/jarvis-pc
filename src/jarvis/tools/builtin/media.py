@@ -19,11 +19,10 @@ class CameraPermissionError(PermissionError):
 
 
 def check_camera_permissions(device_path: str = "/dev/video0") -> bool:
-    path = Path(device_path)
-    if not path.exists():
+    if not os.path.exists(device_path):
         return False
 
-    if not os.access(path, os.R_OK | os.W_OK):
+    if not os.access(device_path, os.R_OK | os.W_OK):
         raise CameraPermissionError(
             f"Permission denied accessing camera device '{device_path}'. "
             "Please ensure current user has access rights (e.g. member of 'video' group)."

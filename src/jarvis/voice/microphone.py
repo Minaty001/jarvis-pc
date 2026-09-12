@@ -63,7 +63,6 @@ class Microphone:
         spoke = False
 
         for chunk in self.iter_chunks(level_callback=level_callback):
-            pre_roll.append(chunk)
             if is_speech(chunk):
                 spoke = True
                 if not frames:
@@ -75,6 +74,8 @@ class Microphone:
                 frames.append(chunk)
             else:
                 unspoken_ms += chunk_ms
+
+            pre_roll.append(chunk)
 
             if spoke and (silent_ms >= SILENCE_MS or len(frames) * chunk_ms / 1000 >= MAX_SECONDS):
                 break

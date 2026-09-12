@@ -61,11 +61,11 @@ prompt you (in the terminal) or return a confirmation challenge over the API.
 - `jarvis version`, `jarvis help` — informational.
 - Ships as a FastAPI server for remote/automated use; local systemd service.
 
-## What it deliberately does NOT do (yet)
+## Advanced Multimodal & Proactive Capabilities
 
-No vision/screen control, no email clients, no streaming/barge-in voice —
-those are deferred in the build plan. It runs on free Groq-tier LLM, single-user,
-on your machine.
+- **Vision & Screen OCR** — Screen capture, Tesseract OCR element detection, and visual grounding with multimodal LLMs (`llama-3.2-11b-vision-preview`).
+- **Full Duplex Audio & Barge-In** — Continuous background speech monitoring allows interrupting spoken replies (`voice_barge_in`).
+- **Proactive Engine** — Monitors battery, system resources, and daily schedules to deliver morning briefings and automated alerts.
 
 To phone-access JARVIS via Telegram, create a bot with @BotFather, set
 `JARVIS_TELEGRAM_TOKEN` and the numeric chat id allow-list `JARVIS_TELEGRAM_ALLOWED_CHATS`,

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import secrets
 import shutil
 import subprocess  # nosec B404
 import sys
@@ -1532,7 +1533,7 @@ def _run_voice(parsed_args, app: Application | None) -> int:
         application = app if app is not None else Application()
         agent = application.agent
         if not agent.confirmation_secret:
-            agent.confirmation_secret = application.settings.confirmation_secret or "repl-local"
+            agent.confirmation_secret = application.settings.confirmation_secret or secrets.token_hex(32)
 
         def on_command(text: str) -> str:
             import asyncio
@@ -1572,7 +1573,7 @@ def _run_voice(parsed_args, app: Application | None) -> int:
         application = app if app is not None else Application()
         agent = application.agent
         if not agent.confirmation_secret:
-            agent.confirmation_secret = application.settings.confirmation_secret or "repl-local"
+            agent.confirmation_secret = application.settings.confirmation_secret or secrets.token_hex(32)
 
         def on_command(text: str) -> str:
             import asyncio
@@ -1627,7 +1628,7 @@ async def _run_repl(application: Application) -> None:
     from jarvis.tools.confirmation import create_confirmation_token
 
     agent = application.agent
-    secret = application.settings.confirmation_secret or "repl-local"
+    secret = application.settings.confirmation_secret or secrets.token_hex(32)
 
     async def confirm(tool_name: str, args: dict) -> str | None:
         if not secret:

@@ -77,9 +77,11 @@ def create_api_app(executor: ToolExecutor, agent=None) -> FastAPI:
         try:
             reply = await chat_agent.respond(request.message, session_id=request.session_id)
         except Exception as exc:
+            import logging
+            logging.getLogger(__name__).exception("Agent chat processing failed: %s", exc)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"brain failure: {exc}",
+                detail="An internal error occurred while processing the chat request.",
             ) from exc
         return ChatResponse(reply=reply)
 

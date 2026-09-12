@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from collections import defaultdict
 from typing import Dict, List
@@ -18,6 +19,7 @@ class RateLimiter:
         self.max_calls = max_calls
         self.period_seconds = period_seconds
         self._history: Dict[str, List[float]] = defaultdict(list)
+        self._sync_lock = threading.Lock()
         self._lock = asyncio.Lock()
 
     def check(self, key: str) -> bool:
@@ -25,15 +27,16 @@ class RateLimiter:
 
         Raises RateLimitExceeded if limit reached. Returns True otherwise.
         """
-        now = time.time()
-        window_start = now - self.period_seconds
-        self._history[key] = [t for t in self._history[key] if t > window_start]
-        if len(self._history[key]) >= self.max_calls:
-            raise RateLimitExceeded(
-                f"Rate limit exceeded for '{key}' ({self.max_calls} calls per {self.period_seconds}s)"
-            )
-        self._history[key].append(now)
-        return True
+        with self._sync_lock:
+            now = time.time()
+            window_start = now - self.period_seconds
+            self._history[key] = [t for t in self._history[key] if t > window_start]
+            if len(self._history[key]) >= self.max_calls:
+                raise RateLimitExceeded(
+                    f"Rate limit exceeded for '{key}' ({self.max_calls} calls per {self.period_seconds}s)"
+                )
+            self._history[key].append(now)
+            return True
 
     async def check_async(self, key: str) -> bool:
         """Async variant of check protected by asyncio.Lock."""

@@ -11,11 +11,11 @@ JARVIS PC is a persistent, tool-using, environment-aware AI voice assistant buil
   - **Floating ORB**: Compact, always-on-top floating widget that keeps JARVIS active in the background. Click to toggle the main window; drag to position anywhere on screen.
   - **Main Window & Panels**: Interactive chat interface integrated with live System Monitor (CPU, RAM, Disk, Battery), Registered Tools Explorer, and Memory Subsystem viewer.
   - **Desktop Integration**: Installs natively into the Linux Mint Application Menu (`jarvis.desktop`), installs launcher (`jarvis-ui`), icon, and optional autostart at login.
-- **Local Voice Pipeline**:
-  - **Wake Word**: 3-stage ONNX neural detector for **"Hey Jarvis"**.
-  - **STT**: Fast local speech recognition via `faster-whisper`.
+- **Local & Cloud Voice Pipeline**:
+  - **Wake Word**: Vosk keyword-spotting grammar engine for **"Hey Jarvis"** and **"Jarvis"**.
+  - **STT**: High-accuracy Groq Whisper (`large-v3-turbo`) with automatic offline Vosk fallback.
   - **TTS**: High-quality streaming neural text-to-speech via `edge-tts`.
-  - **VAD**: CPU-friendly energy-based Voice Activity Detection.
+  - **VAD & Duplex**: Energy-based Voice Activity Detection with live barge-in support.
   - **Hardware Permission Manager**: Automatic detection and permission management for microphones, speakers, and webcams via PulseAudio/PipeWire.
 - **Cognitive Engine Architecture**:
   - Autonomous 6-phase execution loop: **Observe → Understand → Plan → Act → Verify → Record**.
@@ -237,8 +237,8 @@ python3 tests/test_jarvis_app.py
   pactl list sources short
   pulseaudio --start
   ```
-- **Wake Word Sensitivity**:
-  If the wake word triggers too easily or not enough, adjust `JARVIS_WAKE_THRESHOLD` in your `.env` file (default: `0.8`).
+- **Wake Word Sensitivity & Voice Activity Detection**:
+  Adjust `JARVIS_WAKE_VAD_THRESHOLD` in your `.env` file (default: `350`, range: `100-2000`) and configure phrases via `JARVIS_WAKE_PHRASES` (default: `"hey jarvis,jarvis"`).
 - **GTK Import Check**:
   Verify PyGObject and GTK3 bindings:
   ```bash
