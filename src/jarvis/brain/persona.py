@@ -34,6 +34,7 @@ def build_system_prompt(
     user_name: str = "sir",
     user_profile: dict | None = None,
     facts: list[dict] | None = None,
+    graph_context: str | None = None,
 ) -> str:
     """Assemble the full system prompt from the persona plus dynamic sections."""
     sections = [PERSONA.format(user_name=user_name) if "{user_name}" in PERSONA else PERSONA]
@@ -60,7 +61,11 @@ def build_system_prompt(
             fact_lines.append(f"• [{subj}] {key}: {val} ({pred})")
         sections.append("\n".join(fact_lines))
 
-    # 3. Dynamic Tool Schemas
+    # 3. Relational Knowledge Graph Context
+    if graph_context:
+        sections.append(f"## Knowledge Graph & Relational Entities\n{graph_context}")
+
+    # 4. Dynamic Tool Schemas
     if tools:
         sections.append(
             "## Tools\n"
@@ -68,11 +73,11 @@ def build_system_prompt(
             "advances the request; otherwise answer directly.\n" + tools
         )
 
-    # 4. Episodic / Legacy Memories
+    # 5. Episodic / Legacy Memories
     if memories:
         sections.append("## Long-term memory (from prior sessions)\n" + memories)
 
-    # 5. Protocol
+    # 6. Protocol
     sections.append(
         "## Protocol\n"
         "When you invoke a tool, complete the loop: the results of your calls will be returned to "

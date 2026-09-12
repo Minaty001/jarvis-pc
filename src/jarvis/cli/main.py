@@ -255,6 +255,16 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     mem_sub.add_parser("profile", help="Show structured operator profile and preferences")
     mem_sub.add_parser("stats", help="Show memory storage metrics and database path")
 
+    mem_graph = mem_sub.add_parser("graph", help="Query knowledge graph relationships and entity subgraphs")
+    mem_graph.add_argument("--entity", default="User", help="Root entity to traverse (default: User)")
+    mem_graph.add_argument("--depth", type=int, default=2, help="Traversal depth (default: 2)")
+
+    mem_cons = mem_sub.add_parser("consolidate", help="Consolidate raw episodic memories into Knowledge Graph")
+    mem_cons.add_argument("--limit", type=int, default=50, help="Max episodic turns to consolidate")
+
+    mem_ents = mem_sub.add_parser("entities", help="List tracked knowledge graph entities")
+    mem_ents.add_argument("--type", default=None, help="Filter by entity type (person, tool, project, location, concept)")
+
     timer_parser = subparsers.add_parser("timer", help="Set and manage countdown timers")
     timer_parser.add_argument("duration", help="Timer duration (e.g. 10m, 45s, 1h 30m, 5m)")
     timer_parser.add_argument("label", nargs="?", default="Timer", help="Timer label / description")
@@ -923,18 +933,68 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
 
         elif action == "stats":
             summary = store.get_memory_summary()
+            from jarvis.brain.graph import KnowledgeGraph
+            graph = KnowledgeGraph()
+            g_stats = graph.stats()
+
             print("\nJARVIS Memory Subsystem Status:")
             print("=" * 60)
             print(f"• Semantic Facts & Knowledge: {summary['facts_count']}")
             print(f"• User Profile Attributes:    {summary['profile_keys_count']}")
             print(f"• Metacognitive Reflections:  {summary['reflections_count']}")
             print(f"• Episodic Chat Turns:        {summary['episodes_count']}")
+            print(f"• Knowledge Graph Entities:   {g_stats['total_entities']}")
+            print(f"• Knowledge Graph Relations:  {g_stats['total_relations']}")
             print(f"• Database Path:              {summary['db_path']}")
             print("=" * 60 + "\n")
             return 0
 
+        elif action == "graph":
+            from jarvis.brain.graph import KnowledgeGraph
+            graph = KnowledgeGraph()
+            subgraph = graph.get_subgraph(start_entity=parsed_args.entity, depth=parsed_args.depth)
+            if not subgraph.get("relations"):
+                print(f"\nNo graph relationships found for '{parsed_args.entity}'.\n")
+            else:
+                print(f"\nKnowledge Graph Subgraph for '{parsed_args.entity}' (Depth: {parsed_args.depth}):")
+                print("=" * 70)
+                for r in subgraph["relations"]:
+                    conf = int(r["confidence"] * 100)
+                    print(f"• ({r['source_name']}) --[{r['relation_type']}]--> ({r['target_name']}) [{conf}% conf]")
+                print("=" * 70 + "\n")
+            return 0
+
+        elif action == "consolidate":
+            from jarvis.brain.consolidator import MemoryConsolidator
+            consolidator = MemoryConsolidator(memory_store=store)
+            res = consolidator.consolidate(limit=parsed_args.limit)
+            print("\nJARVIS Memory Consolidation:")
+            print("=" * 60)
+            print(f"• Episodes Scanned:      {res['consolidated_episodes']}")
+            print(f"• New Graph Relations:   {res['new_relations']}")
+            print(f"• Extracted Facts:       {res['extracted_facts']}")
+            print(f"• Total Graph Nodes:     {res['total_entities']}")
+            print(f"• Total Graph Edges:     {res['total_relations']}")
+            print("=" * 60 + "\n")
+            return 0
+
+        elif action == "entities":
+            from jarvis.brain.graph import KnowledgeGraph
+            graph = KnowledgeGraph()
+            entities = graph.list_entities(entity_type=parsed_args.type, limit=50)
+            if not entities:
+                print("No entities recorded in the Knowledge Graph yet.")
+            else:
+                print(f"\nTracked Knowledge Graph Entities ({len(entities)}):")
+                print("=" * 65)
+                for e in entities:
+                    alias_str = f" (aliases: {', '.join(e.aliases)})" if e.aliases else ""
+                    print(f"• {e.name:<25} [type: {e.entity_type:<10}]{alias_str}")
+                print("=" * 65 + "\n")
+            return 0
+
         else:
-            print("Usage: jarvis memory {list|search|remember|forget|profile|stats}")
+            print("Usage: jarvis memory {list|search|remember|forget|profile|stats|graph|consolidate|entities}")
             return 1
 
     if parsed_args.subcommand == "timer":

@@ -73,8 +73,12 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         set_system_volume,
     )
     from jarvis.tools.builtin.memory_tools import (
+        add_graph_fact,
+        consolidate_user_memory,
         forget_fact,
         get_user_profile,
+        list_known_entities,
+        query_knowledge_graph,
         recall_facts,
         remember_fact,
     )
@@ -455,6 +459,30 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         capabilities=frozenset({"memory.read"}),
         handler=get_user_profile,
+    ))
+    registry.register(ToolDefinition(
+        name="query_knowledge_graph",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"memory.read"}),
+        handler=query_knowledge_graph,
+    ))
+    registry.register(ToolDefinition(
+        name="consolidate_user_memory",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"memory.manage"}),
+        handler=consolidate_user_memory,
+    ))
+    registry.register(ToolDefinition(
+        name="add_graph_fact",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"memory.manage"}),
+        handler=add_graph_fact,
+    ))
+    registry.register(ToolDefinition(
+        name="list_known_entities",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"memory.read"}),
+        handler=list_known_entities,
     ))
     registry.register(ToolDefinition(
         name="set_timer",

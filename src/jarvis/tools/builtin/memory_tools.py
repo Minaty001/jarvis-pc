@@ -79,3 +79,56 @@ def get_user_profile() -> str:
     lines.append("\n" + "=" * 60)
 
     return "\n".join(lines)
+
+
+def query_knowledge_graph(entity_name: str, depth: int = 2) -> str:
+    """Traverse and retrieve relational facts and connected entities from the Knowledge Graph."""
+    from jarvis.brain.graph import KnowledgeGraph
+    graph = KnowledgeGraph()
+    res = graph.format_subgraph_context(start_entity=entity_name, depth=depth)
+    if not res:
+        return f"No relational graph connections found for entity '{entity_name}'."
+    return res
+
+
+def consolidate_user_memory(limit: int = 50) -> str:
+    """Distill recent conversation history into structured facts and entities in the Knowledge Graph."""
+    from jarvis.brain.consolidator import MemoryConsolidator
+    consolidator = MemoryConsolidator(memory_store=_get_memory_store())
+    metrics = consolidator.consolidate(limit=limit)
+    return (
+        f"Memory consolidation completed:\n"
+        f"• Episodes processed: {metrics['consolidated_episodes']}\n"
+        f"• New relations added: {metrics['new_relations']}\n"
+        f"• Facts extracted:     {metrics['extracted_facts']}\n"
+        f"• Total graph nodes:   {metrics['total_entities']}\n"
+        f"• Total graph edges:   {metrics['total_relations']}"
+    )
+
+
+def add_graph_fact(source_entity: str, relation: str, target_entity: str, confidence: float = 0.95) -> str:
+    """Add a verified relationship edge between two entities in the Knowledge Graph."""
+    from jarvis.brain.graph import KnowledgeGraph
+    graph = KnowledgeGraph()
+    rel = graph.add_relation(
+        source=source_entity.strip(),
+        relation_type=relation.strip(),
+        target=target_entity.strip(),
+        confidence=confidence,
+        evidence="Manual agent entry",
+    )
+    return f"Graph relationship added: ({rel.source_name}) --[{rel.relation_type}]--> ({rel.target_name}) [confidence: {int(rel.confidence * 100)}%]."
+
+
+def list_known_entities(entity_type: Optional[str] = None) -> str:
+    """List all entities tracked in the Knowledge Graph, optionally filtered by type."""
+    from jarvis.brain.graph import KnowledgeGraph
+    graph = KnowledgeGraph()
+    entities = graph.list_entities(entity_type=entity_type, limit=50)
+    if not entities:
+        return "No entities recorded in the Knowledge Graph."
+
+    lines = [f"Tracked Knowledge Graph Entities ({len(entities)}):"]
+    for e in entities:
+        lines.append(f"• {e.name:<25} [type: {e.entity_type}]")
+    return "\n".join(lines)

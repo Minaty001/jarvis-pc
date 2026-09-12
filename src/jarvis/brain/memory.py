@@ -126,7 +126,7 @@ class MemoryStore:
                 return []
 
     def recent(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """Return most recent conversation turns for UI display."""
+        """Return most recent conversation turns for UI display and memory consolidation."""
         with self._lock:
             try:
                 rows = self._conn.execute(
@@ -136,6 +136,8 @@ class MemoryStore:
                 return [
                     {
                         "ts": r[0],
+                        "user": r[1],
+                        "reply": r[2],
                         "category": "chat",
                         "content": f"User: {r[1]} -> Jarvis: {r[2]}",
                     }
