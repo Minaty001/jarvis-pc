@@ -140,11 +140,22 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
     scr_locate = screen_sub.add_parser("locate", help="Visually locate element on screen and click it")
     scr_locate.add_argument("description", help="Description of element (e.g. 'Submit button', 'Settings icon')")
 
-    vision_parser = subparsers.add_parser("vision", help="Multimodal vision analysis")
+    vision_parser = subparsers.add_parser("vision", help="Multimodal vision analysis, screen OCR, and UI element tracking")
     vision_sub = vision_parser.add_subparsers(dest="vision_action", help="Vision action")
+    
     vis_an = vision_sub.add_parser("analyze", help="Analyze an image file using computer vision")
     vis_an.add_argument("image_path", help="Path to image file")
     vis_an.add_argument("--prompt", default="Describe what you see in this image in detail.", help="Question or prompt")
+
+    vis_ocr = vision_sub.add_parser("ocr", help="Extract visible text on screen using OCR")
+    vis_ocr.add_argument("--query", default=None, help="Optional text substring query to locate")
+
+    vis_loc = vision_sub.add_parser("locate", help="Locate interactive UI element on screen")
+    vis_loc.add_argument("description", help="Description of element (e.g. 'Submit button', 'Search bar')")
+
+    vis_wat = vision_sub.add_parser("watch", help="Watch screen state until visual event occurs")
+    vis_wat.add_argument("event", help="Description of event to watch for")
+    vis_wat.add_argument("--timeout", type=float, default=30.0, help="Timeout in seconds")
 
     code_parser = subparsers.add_parser("code", help="Multi-agent coding copilot for autonomous refactoring and test generation")
     code_parser.add_argument("task", help="Coding task or refactor instruction")
@@ -485,6 +496,7 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
 
     if parsed_args.subcommand == "vision":
         from jarvis.tools.builtin.vision import analyze_image
+        from jarvis.tools.builtin.screen import locate_ui_element, read_screen_text, watch_screen_for_event
 
         if parsed_args.vision_action == "analyze":
             application = app if app is not None else Application()
@@ -496,13 +508,30 @@ def run_cli(args: Sequence[str] | None = None, app: Application | None = None) -
                 print(f"\nJARVIS Visual Analysis:")
                 print("-" * 65)
                 print(reply)
-                print("-" * 65)
+                print("-" * 65 + "\n")
                 return 0
             except Exception as exc:
                 print(f"Visual analysis failed: {exc}")
                 return 1
+
+        elif parsed_args.vision_action == "ocr":
+            reply = asyncio.run(read_screen_text(query=parsed_args.query))
+            print(f"\n[JARVIS Screen OCR]\n{reply}\n")
+            return 0
+
+        elif parsed_args.vision_action == "locate":
+            reply = asyncio.run(locate_ui_element(parsed_args.description))
+            print(f"\n[JARVIS Visual Grounder]\n{reply}\n")
+            return 0
+
+        elif parsed_args.vision_action == "watch":
+            print(f"\n[JARVIS Screen Watcher] Watching for: '{parsed_args.event}' (Timeout: {parsed_args.timeout}s)...")
+            reply = asyncio.run(watch_screen_for_event(parsed_args.event, timeout_seconds=parsed_args.timeout))
+            print(f"{reply}\n")
+            return 0
+
         else:
-            print("Usage: jarvis vision analyze <image_path> [--prompt ...]")
+            print("Usage: jarvis vision {analyze|ocr|locate|watch}")
             return 1
 
     if parsed_args.subcommand == "code":

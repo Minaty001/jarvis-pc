@@ -175,3 +175,74 @@ async def list_open_windows() -> list[dict[str, Any]]:
     except Exception as exc:
         logger.warning("Error listing open windows via wmctrl: %s", exc)
         return []
+
+
+async def read_screen_text(query: Optional[str] = None) -> str:
+    """Read visible text on the screen using OCR, optionally filtering for a query."""
+    from jarvis.brain.vision.ocr import ScreenOCREngine
+    ocr = ScreenOCREngine()
+    
+    # Capture temporary screenshot
+    shot_msg = await take_screenshot()
+    match_path = None
+    for word in shot_msg.split():
+        if word.endswith(".png") and Path(word).is_file():
+            match_path = Path(word)
+            break
+    
+    if not match_path or not match_path.is_file():
+        return "Failed to capture screen for OCR text reading."
+
+    elements = ocr.extract_text_elements(match_path)
+    if not elements:
+        return "No text detected on screen (or Tesseract OCR is not installed)."
+
+    if query:
+        matches = [e for e in elements if query.lower() in e.text.lower()]
+        if not matches:
+            return f"Query '{query}' was not found in visible screen text."
+        lines = [f"Found {len(matches)} match(es) for '{query}':"]
+        for m in matches:
+            lines.append(f"• '{m.text}' at ({m.bbox.center[0]}, {m.bbox.center[1]}) [box: {m.bbox.width}x{m.bbox.height}]")
+        return "\n".join(lines)
+
+    lines = [f"Extracted {len(elements)} text segments from screen:"]
+    for e in elements[:40]:
+        lines.append(f"• {e.text}")
+    return "\n".join(lines)
+
+
+async def locate_ui_element(element_description: str) -> str:
+    """Locate an interactive UI element on screen (button, field, icon) and return its exact coordinates."""
+    from jarvis.brain.vision.grounding import VisualGrounder
+    grounder = VisualGrounder()
+
+    shot_msg = await take_screenshot()
+    match_path = None
+    for word in shot_msg.split():
+        if word.endswith(".png") and Path(word).is_file():
+            match_path = Path(word)
+            break
+
+    if not match_path:
+        return "Failed to capture screen for visual element localization."
+
+    res = await grounder.locate_element(element_description, match_path)
+    if res.get("found"):
+        return (
+            f"Located UI element '{element_description}':\n"
+            f"• Position: ({res['x']}, {res['y']})\n"
+            f"• Method:   {res.get('method', 'grounding')}\n"
+            f"• Confidence: {int(res.get('confidence', 1.0) * 100)}%"
+        )
+    return f"Could not locate UI element matching '{element_description}': {res.get('error', 'Not found')}"
+
+
+async def watch_screen_for_event(event_description: str, timeout_seconds: float = 30.0) -> str:
+    """Continuously observe screen state until a target visual event or condition occurs."""
+    from jarvis.brain.vision.watcher import ScreenWatcherService
+    watcher = ScreenWatcherService()
+    res = await watcher.watch_for_event(event_description, timeout_seconds=timeout_seconds)
+    if res["triggered"]:
+        return f"Event detected after {res['elapsed_seconds']}s: {res['observation']}"
+    return f"Watch timed out after {res['elapsed_seconds']}s: {res['observation']}"

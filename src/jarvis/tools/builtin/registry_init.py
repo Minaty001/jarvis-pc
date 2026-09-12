@@ -18,7 +18,14 @@ def register_all_builtins(registry: ToolRegistry) -> None:
     from jarvis.tools.builtin.processes import find_processes
     from jarvis.tools.builtin.media import check_camera_permissions, play_song
     from jarvis.tools.builtin.camera import list_cameras, take_photo
-    from jarvis.tools.builtin.screen import take_screenshot, get_active_window, list_open_windows
+    from jarvis.tools.builtin.screen import (
+        get_active_window,
+        list_open_windows,
+        locate_ui_element,
+        read_screen_text,
+        take_screenshot,
+        watch_screen_for_event,
+    )
     from jarvis.tools.builtin.vision import analyze_image
     from jarvis.tools.builtin.browser import browse_web
     from jarvis.tools.builtin.coding import (
@@ -165,6 +172,24 @@ def register_all_builtins(registry: ToolRegistry) -> None:
         risk=RiskLevel.CONFIRM,
         capabilities=frozenset({"desktop.screen"}),
         handler=take_screenshot,
+    ))
+    registry.register(ToolDefinition(
+        name="read_screen_text",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"desktop.screen"}),
+        handler=read_screen_text,
+    ))
+    registry.register(ToolDefinition(
+        name="locate_ui_element",
+        risk=RiskLevel.SAFE,
+        capabilities=frozenset({"desktop.screen", "media.vision"}),
+        handler=locate_ui_element,
+    ))
+    registry.register(ToolDefinition(
+        name="watch_screen_for_event",
+        risk=RiskLevel.CONFIRM,
+        capabilities=frozenset({"desktop.screen", "media.vision"}),
+        handler=watch_screen_for_event,
     ))
     registry.register(ToolDefinition(
         name="get_active_window",
